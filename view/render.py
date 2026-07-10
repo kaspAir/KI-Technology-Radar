@@ -268,6 +268,8 @@ def main() -> int:
   .sub{{color:#6b6862;font-size:14px;margin:0 0 8px}}
   .jur{{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#6b6862;margin:0 0 18px}}
   .jur select{{font:inherit;color:{INK};background:#fff;border:1px solid #e7e3da;border-radius:8px;padding:4px 8px}}
+  .berichtlink{{margin:0 0 14px}}
+  .berichtlink a{{font-size:13px;color:{GOLD};text-decoration:none}}
   .legend{{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:#6b6862;margin:8px 0 18px}}
   .legend b{{color:{INK};font-weight:500}}
   .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}}
@@ -294,6 +296,7 @@ def main() -> int:
 <h1>KI-Technology-Radar</h1>
 <p class="sub">Stand {stamp} · {len(placed)} Einträge</p>
 {country_sel}
+<p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a></p>
 {''.join(svg)}
 <div class="legend"><b>Ringe (innen→aussen):</b>
 <span><b>Adopt</b> produktiv nutzen</span><span><b>Pilot</b> real erproben</span>
