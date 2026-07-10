@@ -40,6 +40,9 @@ pipeline {
           // Commit fuer die Herkunft im Testprotokoll (Container hat kein git).
           env.RADAR_COMMIT = scmVars.GIT_COMMIT ?: ''
           echo "Branch=${branch}  ->  Umgebung=${env.RADAR_ENV}  (Commit ${env.RADAR_COMMIT})"
+          echo "Deploy-Konfig: DEPLOY_HOST=${env.DEPLOY_HOST ? 'gesetzt' : 'FEHLT'}, " +
+               "DEPLOY_CREDENTIAL=${env.DEPLOY_CREDENTIAL ?: '(default ki-tech-radar-deploy)'}, " +
+               "DEPLOY_ENABLED=${env.DEPLOY_ENABLED ?: 'nicht gesetzt'}"
         }
       }
     }
