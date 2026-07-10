@@ -92,11 +92,12 @@ def main() -> int:
     pat_label = {p["id"]: p.get("label", p["id"]) for p in collect(CORE / "patterns", "patterns.yaml", "patterns")}
     src_of = {s["id"]: s for s in collect(inst / "sources", "*.yaml", "sources")}
 
-    def src_link(sid: str) -> str:
+    def src_link(sid: str, target: str = "") -> str:
+        # Link zeigt auf den ARTIKEL (target=obs.url) wenn vorhanden, sonst auf die Quelle.
         s = src_of.get(sid, {})
         name = esc(s.get("name", sid))
-        url = s.get("url")
-        return f'<a href="{esc(url)}" target="_blank" rel="noopener">{name}</a>' if url else name
+        href = target or s.get("url")
+        return f'<a href="{esc(href)}" target="_blank" rel="noopener">{name}</a>' if href else name
 
     entries = {e["id"]: e for e in collect(inst / "entries", "entry.yaml", "entries")}
     entry = entries.get(args.entry)
@@ -153,9 +154,9 @@ def main() -> int:
     if obs:
         w("<h2>Beobachtungen (Belege)</h2>")
         for o in obs:
-            src = ", ".join(src_link(s) for s in o.get("source_ids", []))
             url = o.get("url")
-            beleg = (f' <a class="beleg" href="{esc(url)}" target="_blank" rel="noopener">Beleg öffnen ↗</a>'
+            src = ", ".join(src_link(s, url) for s in o.get("source_ids", []))
+            beleg = (f' <a class="beleg" href="{esc(url)}" target="_blank" rel="noopener">Artikel öffnen ↗</a>'
                      if url else "")
             w(f'<div class="obs"><div class="obs-h"><b>{esc(o.get("title"))}</b>'
               f'<span class="conf">{esc(o.get("confidence"))} · {ch_date(o.get("date_published"))}</span></div>'

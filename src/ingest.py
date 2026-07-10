@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import email.utils
+import hashlib
 import json
 import os
 import re
@@ -72,11 +74,28 @@ def slugify(s: str) -> str:
     return s or "x"
 
 
-# --- Quellen-Adapter: arXiv --------------------------------------------------
+# --- Quellen-Adapter ---------------------------------------------------------
+# Jeder Adapter liefert normalisierte Items:
+#   {source_id, title, summary, url, published (YYYY-MM-DD), slug, cite}
+# `url` ist der DEEP-LINK auf den echten Artikel/Eintrag (nicht die Quell-Startseite).
 
-def fetch_arxiv(query: str, since: str, max_items: int, source_xml: str | None) -> list[dict]:
-    """Holt jüngste arXiv-Treffer (submittedDate desc) und filtert client-seitig
-    auf published >= since. Liefert normalisierte Item-Dicts."""
+def _norm_date(s: str) -> str:
+    s = (s or "").strip()
+    m = re.match(r"(\d{4}-\d{2}-\d{2})", s)
+    if m:
+        return m.group(1)
+    try:
+        return email.utils.parsedate_to_datetime(s).date().isoformat()
+    except Exception:
+        return ""
+
+
+def _strip_html(s: str) -> str:
+    return " ".join(re.sub(r"<[^>]+>", " ", s or "").split())
+
+
+def fetch_arxiv(src, query, since, max_items, source_xml=None):
+    """arXiv-API (submittedDate desc), client-seitig auf published >= since gefiltert."""
     if source_xml:
         raw = Path(source_xml).read_text(encoding="utf-8")
     else:
@@ -92,39 +111,75 @@ def fetch_arxiv(query: str, since: str, max_items: int, source_xml: str | None) 
         pub = (e.findtext(f"{ATOM}published") or "")[:10]
         if since and pub and pub < since:
             continue
-        aid_url = (e.findtext(f"{ATOM}id") or "").strip()
-        aid = re.sub(r"v\d+$", "", aid_url.rsplit("/", 1)[-1])
+        aid = re.sub(r"v\d+$", "", (e.findtext(f"{ATOM}id") or "").strip().rsplit("/", 1)[-1])
         authors = [a.findtext(f"{ATOM}name") or "" for a in e.findall(f"{ATOM}author")]
+        first = authors[0].split()[-1] if authors and authors[0].split() else "o.A."
+        etal = " et al." if len(authors) > 1 else ""
+        title = " ".join((e.findtext(f"{ATOM}title") or "").split())
         items.append({
-            "arxiv_id": aid,
-            "title": " ".join((e.findtext(f"{ATOM}title") or "").split()),
+            "source_id": src["id"], "title": title,
             "summary": " ".join((e.findtext(f"{ATOM}summary") or "").split()),
-            "authors": authors,
-            "published": pub,
-            "url": f"https://arxiv.org/abs/{aid}" if aid else aid_url,
+            "url": f"https://arxiv.org/abs/{aid}" if aid else "",
+            "published": pub, "slug": slugify(aid),
+            "cite": f'{first}{etal}, „{title}", {pub[:4]}, arXiv:{aid}.',
         })
         if len(items) >= max_items:
             break
     return items
 
 
-def citation_for(item: dict) -> str:
-    first = (item["authors"][0].split()[-1] if item.get("authors") else "o.A.")
-    etal = " et al." if len(item.get("authors", [])) > 1 else ""
-    year = (item.get("published") or "")[:4]
-    return f'{first}{etal}, „{item["title"]}", {year}, arXiv:{item["arxiv_id"]}.'
+def fetch_feed(src, feed_url, since, max_items):
+    """Generischer RSS/Atom-Adapter: Titel, Deep-Link, Zusammenfassung, Datum je Item."""
+    req = urllib.request.Request(feed_url, headers={"User-Agent": "ki-radar-ingest/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        raw = r.read()
+    root = ET.fromstring(raw)
+    nodes = root.findall(".//{*}item") or root.findall(".//{*}entry")
+    name = src.get("name", src["id"])
+    items = []
+    for n in nodes:
+        title = " ".join((n.findtext("{*}title") or "").split())
+        link_el = n.find("{*}link")
+        url = ((link_el.get("href") or link_el.text or "").strip() if link_el is not None else "")
+        summ = _strip_html(n.findtext("{*}description") or n.findtext("{*}summary")
+                           or n.findtext("{*}content") or "")
+        pub = _norm_date(n.findtext("{*}pubDate") or n.findtext("{*}published")
+                         or n.findtext("{*}updated") or "")
+        if not title or not url:
+            continue
+        if since and pub and pub < since:
+            continue
+        h = hashlib.md5(url.encode("utf-8")).hexdigest()[:6]
+        items.append({
+            "source_id": src["id"], "title": title, "summary": summ, "url": url,
+            "published": pub, "slug": (slugify(title)[:48] or "x") + "-" + h,
+            "cite": f'{name}, „{title}"' + (f", {pub}" if pub else "") + f". {url}",
+        })
+        if len(items) >= max_items:
+            break
+    return items
+
+
+def fetch_source(src, since, max_items, source_xml=None):
+    ing = src.get("ingest") or {}
+    if ing.get("type") == "arxiv":
+        return fetch_arxiv(src, ing.get("query", "cat:cs.AI"), since, max_items, source_xml)
+    if ing.get("type") == "feed":
+        return fetch_feed(src, ing["feed"], since, max_items)
+    return []
 
 
 # --- Entwurf: Dry-Run (kostenlos) -------------------------------------------
 
-def observation_of(item, source_id, run_date, created_by, title=None, summary=None, confidence="likely"):
+def observation_of(item, run_date, created_by, title=None, summary=None, confidence="likely"):
+    body = summary or item.get("summary") or item["title"]
     return {
-        "id": f"obs.ingest-{slugify(item['arxiv_id'])}",
+        "id": f"obs.ingest-{item['slug']}",
         "radar_entry_id": None,                 # bleibt im Korb bis Ratifikation
-        "source_ids": [source_id],
+        "source_ids": [item["source_id"]],
         "title": (title or item["title"])[:200],
-        "summary": summary or ((item["summary"][:400] + "…") if len(item["summary"]) > 400 else item["summary"]),
-        "citation": citation_for(item),
+        "summary": (body[:400] + "…") if len(body) > 400 else body,
+        "citation": item["cite"],
         "url": item["url"],
         "confidence": confidence,
         "status": "inbox",
@@ -134,10 +189,10 @@ def observation_of(item, source_id, run_date, created_by, title=None, summary=No
     }
 
 
-def draft_dry(item: dict, source_id: str, run_date: str) -> dict:
+def draft_dry(item: dict, run_date: str) -> dict:
     # Ohne Modell keine Branchen-Zuordnung möglich → Querschnitt als Platzhalter.
     return {
-        "observation": observation_of(item, source_id, run_date, "ki:ingest-dry"),
+        "observation": observation_of(item, run_date, "ki:ingest-dry"),
         "branchen": ["domain.querschnitt-grundlagen"],
         "suggested_entry": "",
         "relevance_general": None,
@@ -165,7 +220,7 @@ def call_anthropic(model: str, system: str, user: str, max_tokens: int) -> tuple
     return text, data.get("usage", {})
 
 
-def draft_real(item, source_id, run_date, rubric, scope, model, max_tokens):
+def draft_real(item, run_date, rubric, scope, model, max_tokens):
     """Ein Modellaufruf je Item. Das Modell bewertet Relevanz und entwirft — Zitat
     und URL kommen ZWINGEND aus dem Item (keine erfundenen Fundstellen, E8)."""
     system = (
@@ -217,7 +272,7 @@ def draft_real(item, source_id, run_date, rubric, scope, model, max_tokens):
     if verdict.get("ai_related"):
         branchen = [b for b in (verdict.get("branchen") or []) if isinstance(b, str) and b.startswith("domain.")]
         cand = {
-            "observation": observation_of(item, source_id, run_date, f"ki:{model}",
+            "observation": observation_of(item, run_date, f"ki:{model}",
                                           title=verdict.get("title"), summary=verdict.get("summary"),
                                           confidence=verdict.get("confidence", "likely")),
             "branchen": branchen or ["domain.querschnitt-grundlagen"],
@@ -250,10 +305,12 @@ def obs_ok(o: dict) -> str | None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Ingestion-Agent: Quellen -> Eingangskorb.")
     ap.add_argument("--instance", required=True)
-    ap.add_argument("--source", required=True, help="Quellen-ID für die Zuordnung, z.B. source.research-ml")
+    ap.add_argument("--all-sources", action="store_true",
+                    help="alle kuratierten Quellen mit ingest-Block abarbeiten (statt einer)")
+    ap.add_argument("--source", default=None, help="Einzelquelle (arXiv), z.B. source.research-ml")
     ap.add_argument("--arxiv-query", default="cat:cs.CL OR cat:cs.AI OR cat:cs.LG")
     ap.add_argument("--since", default="", help="YYYY-MM-DD: nur Items ab diesem Datum")
-    ap.add_argument("--max-items", type=int, default=15, help="harter Deckel: max. Items")
+    ap.add_argument("--max-items", type=int, default=15, help="harter Deckel: max. Items JE Quelle")
     ap.add_argument("--max-output-tokens", type=int, default=20000, help="harter Deckel: Summe Output-Tokens")
     ap.add_argument("--max-cost-usd", type=float, default=0.0,
                     help="harter Kosten-Deckel in USD (braucht --price-in/--price-out); 0 = aus")
@@ -273,13 +330,32 @@ def main() -> int:
     if not outdir.is_absolute():
         outdir = (Path.cwd() / outdir).resolve()
 
-    # Quelle muss kuratiert sein (E6) — sonst kein Ingest.
-    src_ids = {s["id"] for s in collect(inst / "sources", "*.yaml", "sources")}
-    if args.source not in src_ids:
-        sys.exit(f"Quelle {args.source} ist nicht kuratiert (E6). Bekannt: {sorted(src_ids)}")
+    # Quellen sind kuratiert (E6). Einzelmodus: arXiv-Query auf die gewählte Quelle;
+    # --all-sources: jede Quelle mit einem `ingest`-Block (arxiv/feed).
+    sources = collect(inst / "sources", "*.yaml", "sources")
+    src_by_id = {s["id"]: s for s in sources}
+    if args.all_sources:
+        todo = [s for s in sources if s.get("ingest")]
+        if not todo:
+            sys.exit("Keine kuratierte Quelle hat einen ingest-Block.")
+    else:
+        if not args.source or args.source not in src_by_id:
+            sys.exit(f"--source fehlt/ungültig (oder nutze --all-sources). Bekannt: {sorted(src_by_id)}")
+        base = dict(src_by_id[args.source])
+        base["ingest"] = {"type": "arxiv", "query": args.arxiv_query}
+        todo = [base]
 
-    items = fetch_arxiv(args.arxiv_query, args.since, args.max_items, args.source_file)
-    print(f"Geholt: {len(items)} Items (arXiv, seit {args.since or 'Anfang'})")
+    items = []
+    for s in todo:
+        try:
+            got = fetch_source(s, args.since, args.max_items,
+                               args.source_file if not args.all_sources else None)
+        except Exception as ex:                       # eine kaputte Quelle stoppt nicht alles
+            print(f"  {s['id']}: Fehler beim Holen ({type(ex).__name__}: {str(ex)[:60]})")
+            continue
+        print(f"  {s['id']}: {len(got)} Items")
+        items.extend(got)
+    print(f"Geholt: {len(items)} Items aus {len(todo)} Quelle(n) (seit {args.since or 'Anfang'})")
 
     # Bekannte Branchen (domain-Taxonomie) — für Prompt UND Validierung der Zuordnung.
     domains = collect(CORE / "vocab-core", "domain.yaml", "terms")
@@ -315,11 +391,11 @@ def main() -> int:
             report_rows.append(("—", it["title"][:60], f"GESTOPPT (Kosten-Deckel ${args.max_cost_usd:.2f})"))
             break
         if args.dry_run:
-            c = draft_dry(it, args.source, args.run_date)
+            c = draft_dry(it, args.run_date)
             verdict = {"ai_related": True, "reason": "dry-run"}
         else:
             try:
-                c, verdict, usage = draft_real(it, args.source, args.run_date, rubric,
+                c, verdict, usage = draft_real(it, args.run_date, rubric,
                                                scope, args.model, 1024)
             except Exception as ex:  # ein Fehler darf den Lauf nicht abbrechen
                 report_rows.append(("!", it["title"][:60], f"Fehler: {ex}"))
@@ -348,8 +424,10 @@ def main() -> int:
                                            sort_keys=False), encoding="utf-8")
     # Laufbericht: ehrliche Bilanz (Items, Entwürfe, Tokens, geschätzte Kosten).
     cost = (tok_in / 1e6) * args.price_in + (tok_out / 1e6) * args.price_out
+    quellen = (", ".join(s["id"] for s in todo) if args.all_sources
+               else f"{args.source} · Query: `{args.arxiv_query}`")
     lines = [f"# Ingestion-Lauf {stamp}", "",
-             f"- Quelle: {args.source} · Query: `{args.arxiv_query}` · seit {args.since or 'Anfang'}",
+             f"- Quellen: {quellen} · seit {args.since or 'Anfang'}",
              f"- Modus: {'DRY-RUN (kostenlos)' if args.dry_run else args.model}",
              f"- Items geholt: {len(items)} · Kandidaten: {len(cands)}",
              f"- Deckel: max_items {args.max_items}, max_output_tokens {args.max_output_tokens}",

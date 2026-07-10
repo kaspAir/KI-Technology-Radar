@@ -75,10 +75,12 @@ def main() -> int:
             if isinstance(d, dict) and "candidates" in d:
                 cands.extend(d["candidates"])
 
-    def src_link(sid):
+    def src_link(sid, target):
+        # Link zeigt auf den ARTIKEL (target=obs.url) wenn vorhanden, sonst auf die Quelle.
         s = src_of.get(sid, {})
         name = esc(s.get("name", sid))
-        return f'<a href="{esc(s["url"])}" target="_blank" rel="noopener">{name}</a>' if s.get("url") else name
+        href = target or s.get("url")
+        return f'<a href="{esc(href)}" target="_blank" rel="noopener">{name}</a>' if href else name
 
     # Branchen, die tatsächlich vorkommen → Filter-Dropdown.
     present: dict[str, int] = {}
@@ -100,19 +102,21 @@ def main() -> int:
         data = " ".join(esc(b) for b in brs)
         chips = " ".join(f'<span class="chip">{esc(labels.get(b, b))}</span>' for b in brs)
         url = o.get("url")
-        beleg = (f' · <a href="{esc(url)}" target="_blank" rel="noopener">Beleg ↗</a>') if url else ""
+        art = (f' · <a href="{esc(url)}" target="_blank" rel="noopener">Artikel öffnen ↗</a>') if url else ""
         rel = c.get("relevance_general")
         sug = c.get("suggested_entry") or "—"
         newbr = (f' · <span class="newbr">Branchen-Vorschlag: {esc(c["new_branche"])}</span>'
                  if c.get("new_branche") else "")
-        srcs = ", ".join(src_link(s) for s in o.get("source_ids", []))
+        srcs = ", ".join(src_link(s, url) for s in o.get("source_ids", []))
+        titlehtml = (f'<a href="{esc(url)}" target="_blank" rel="noopener">{esc(o.get("title"))}</a>'
+                     if url else esc(o.get("title")))
         cards.append(
             f'<article class="card" data-br="{data}">'
             f'<div class="chips">{chips}<span class="rel">Relevanz {esc(rel) if rel else "—"}</span></div>'
-            f'<h3>{esc(o.get("title"))}</h3>'
+            f'<h3>{titlehtml}</h3>'
             f'<p class="sum">{esc(o.get("summary"))}</p>'
             f'<p class="meta">Vorschlag Eintrag: <b>{esc(sug)}</b>{newbr}</p>'
-            f'<p class="cite">Quelle: {srcs} — {esc(o.get("citation"))}{beleg}</p>'
+            f'<p class="cite">Quelle: {srcs} — {esc(o.get("citation"))}{art}</p>'
             f'</article>')
 
     stamp = datetime.datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
@@ -138,6 +142,8 @@ def main() -> int:
   .chip{{background:{PAPER};border:1px solid #e7e3da;border-radius:999px;padding:2px 10px;font-size:12px;color:#6b6862}}
   .rel{{margin-left:auto;font-size:12px;color:{GOLD};font-weight:600}}
   h3{{font-size:17px;font-weight:600;margin:2px 0 6px}}
+  h3 a{{color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)}}
+  h3 a:hover{{color:{GOLD}}}
   .sum{{font-size:14px;line-height:1.55;margin:0 0 8px}}
   .meta{{font-size:13px;color:#4a4741;margin:0 0 4px}}
   .newbr{{color:{GOLD}}}

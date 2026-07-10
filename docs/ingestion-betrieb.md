@@ -1,10 +1,15 @@
 # Ingestion-Agent — Betrieb (Kalibrierung → Server)
 
 Der Agent (`src/ingest.py`) sammelt aus **kuratierten Quellen** (E6) und legt
-`status: inbox`-Beobachtungen in die Instanz `inbox/`. Er **ratifiziert nichts** —
-in den Radar hebt ein Mensch die Entwürfe (E4). Kosten laufen auf den
-Anthropic-Key; deshalb harte Deckel (`--max-items`, `--max-output-tokens`) und
-eine ehrliche Token-/Kostenbilanz im Laufbericht.
+KI-bezogene Treffer als **Kandidaten** (nach Branche zugeordnet) in die Instanz
+`inbox/`. Er **ratifiziert nichts** — in den Radar hebt ein Mensch die Entwürfe (E4).
+Kosten laufen auf den Anthropic-Key; deshalb harte Deckel (`--max-items` je Quelle,
+`--max-output-tokens`, `--max-cost-usd`) und eine ehrliche Bilanz im Laufbericht.
+
+**Quellen** stehen in `<instance>/sources/sources.yaml`. Eine Quelle mit `ingest:`-Block
+wird automatisch abgerufen (`type: arxiv` mit `query`, oder `type: feed` mit RSS/Atom-
+`feed`-URL). `--all-sources` arbeitet alle davon ab; `--source <id> --arxiv-query <q>`
+nur eine (arXiv). Deep-Links zeigen auf den echten Artikel, nicht die Startseite.
 
 ## 1. Mechanik testen (kostenlos)
 

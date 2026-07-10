@@ -21,3 +21,18 @@ properties:
     enum: [high, medium, low]
   cadence:
     enum: [weekly, monthly]
+  ingest:
+    description: "Automatischer Abruf durch den Ingestion-Agenten (optional). Ohne = nur manuell."
+    type: object
+    additionalProperties: false
+    required: [type]
+    properties:
+      type:
+        enum: [arxiv, feed]
+      query:
+        type: string
+        description: "arXiv-Suchausdruck (nur type=arxiv)"
+      feed:
+        type: string
+        format: uri
+        description: "RSS/Atom-Feed-URL (nur type=feed)"
