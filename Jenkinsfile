@@ -111,7 +111,12 @@ pipeline {
     // nur scharf bei DEPLOY_ENABLED=true — sonst sauber übersprungen, Build bleibt
     // grün. Nur der öffentliche Kern wird deployt, nie die private Instanz.
     stage('Deploy') {
-      when { expression { env.DEPLOY_ENABLED?.trim() == 'true' } }
+      // Skip in Umgebungen, deren Inhalt der Radar-Ansicht-Job (Instanz) liefert:
+      // DEPLOY_SKIP_ENVS z.B. "dev" -> Kern deployt dort NICHT die Platzhalterseite.
+      when { expression {
+        env.DEPLOY_ENABLED?.trim() == 'true' &&
+        !((env.DEPLOY_SKIP_ENVS ?: '').trim().split(/[,\s]+/) as List).contains(env.RADAR_ENV)
+      } }
       steps {
         sshagent(credentials: [(env.DEPLOY_CREDENTIAL?.trim() ?: 'ki-tech-radar-deploy')]) {
           sh '''
