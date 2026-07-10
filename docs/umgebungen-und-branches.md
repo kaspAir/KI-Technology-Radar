@@ -52,11 +52,20 @@ dev  --(dev grün + Freigabe)-->  test  --(Freigabe)-->  int  --(Freigabe)-->  m
 | `int`  | int  | 3.3 KI-Radar Int |
 | `main` | prod | 3.4 KI-Radar Prod |
 
+## Deploy
+
+Per SSH-git-pull wie die übrige Suite (kein Docker auf dem Zielhost). Der
+Subdomain-Docroot jeder Umgebung zeigt auf `site/` im jeweiligen Host-Checkout;
+`deploy/deploy.sh` zieht den passenden Branch. Verdrahtet im `Jenkinsfile`, scharf
+nur bei `DEPLOY_ENABLED=true`. Einrichtung und benötigte Variablen:
+[deploy/README.md](../deploy/README.md).
+
 ## Offene Infrastruktur-Punkte (Betreiber)
 
-- **Deploy-Mechanismus** je Umgebung (Jenkins-Credential `ki-tech-radar-deploy`).
+- SSH-Credential `ki-tech-radar-deploy` + `DEPLOY_HOST` / `DEPLOY_PATH_*` in Jenkins setzen,
+  Host-Checkouts je Umgebung anlegen (Docroot → `site/`), dann `DEPLOY_ENABLED=true`.
 - Branch-Protection so, dass Promotion nur nach grüner Suite + Freigabe möglich ist.
-- Der Radar hat in R1 **noch keinen laufenden Dienst** (YAML-first, keine UI vor
-  stabilem Schema — E1). Bis dahin ist „Deploy" primär: validierte Daten +
-  Testprotokoll bereitstellen; eine ausspielbare Ansicht kommt in einem späteren
-  Release.
+- Der Radar hat in R1 **noch keine interaktive UI** (YAML-first, keine UI vor
+  stabilem Schema — E1). Deployt wird eine **statische Platzhalter-Seite**
+  (`site/`), die je Umgebung ein Lebenszeichen zeigt; die echte Radar-Ansicht
+  kommt in einem späteren Release.
