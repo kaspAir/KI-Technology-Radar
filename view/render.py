@@ -26,6 +26,8 @@ from pathlib import Path
 
 import yaml
 
+from _fmt import ch_date
+
 CORE = Path(__file__).resolve().parent.parent
 GOLD = "#C0851F"
 INK = "#23262D"
@@ -217,7 +219,7 @@ def main() -> int:
         ring = e.get("current_ring", "")
         area = area_label.get(top_area(e.get("area", "")), "")
         if args.mode == "public":
-            detail = f'first seen {esc(e.get("first_seen"))}'
+            detail = f'seit {ch_date(e.get("first_seen"))}'
         else:
             detail = (f'Relevanz {esc(a.get("relevance_general"))}/{esc(a.get("relevance_org"))} · '
                       f'Handlungsdruck {esc(a.get("action_pressure"))} · {esc(a.get("momentum"))}')
@@ -229,8 +231,8 @@ def main() -> int:
             f'<div class="name">{esc(e.get("name"))}</div>'
             f'<div class="detail">{detail}</div></div></a>')
 
-    stamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
-    stand = f"Stand zum {asof} (historisch)" if asof else f"Stand {stamp}"
+    stamp = datetime.datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+    stand = f"Stand zum {ch_date(asof)} (historisch)" if asof else f"Stand {stamp}"
     mode_note = ("Öffentliche Ansicht (Allowlist, E26)" if args.mode == "public"
                  else "Interne Ansicht — enthält private Wertung (E25), nicht veröffentlichen")
 

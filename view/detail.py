@@ -17,6 +17,8 @@ from pathlib import Path
 
 import yaml
 
+from _fmt import ch_date
+
 CORE = Path(__file__).resolve().parent.parent
 GOLD, INK, PAPER = "#C0851F", "#23262D", "#F8F6F2"
 RING_MEAN = {"Watch": "beobachten", "Explore": "aktiv experimentieren",
@@ -88,7 +90,13 @@ def main() -> int:
     for t in collect(inst / "vocab", "*.yaml", "terms"):
         labels[t["id"]] = t.get("label", t["id"])
     pat_label = {p["id"]: p.get("label", p["id"]) for p in collect(CORE / "patterns", "patterns.yaml", "patterns")}
-    src_name = {s["id"]: s.get("name", s["id"]) for s in collect(inst / "sources", "*.yaml", "sources")}
+    src_of = {s["id"]: s for s in collect(inst / "sources", "*.yaml", "sources")}
+
+    def src_link(sid: str) -> str:
+        s = src_of.get(sid, {})
+        name = esc(s.get("name", sid))
+        url = s.get("url")
+        return f'<a href="{esc(url)}" target="_blank" rel="noopener">{name}</a>' if url else name
 
     entries = {e["id"]: e for e in collect(inst / "entries", "entry.yaml", "entries")}
     entry = entries.get(args.entry)
@@ -145,11 +153,14 @@ def main() -> int:
     if obs:
         w("<h2>Beobachtungen (Belege)</h2>")
         for o in obs:
-            src = ", ".join(src_name.get(s, s) for s in o.get("source_ids", []))
+            src = ", ".join(src_link(s) for s in o.get("source_ids", []))
+            url = o.get("url")
+            beleg = (f' <a class="beleg" href="{esc(url)}" target="_blank" rel="noopener">Beleg öffnen ↗</a>'
+                     if url else "")
             w(f'<div class="obs"><div class="obs-h"><b>{esc(o.get("title"))}</b>'
-              f'<span class="conf">{esc(o.get("confidence"))} · {esc(o.get("date_published"))}</span></div>'
+              f'<span class="conf">{esc(o.get("confidence"))} · {ch_date(o.get("date_published"))}</span></div>'
               f'<p>{esc(o.get("summary"))}</p>'
-              f'<p class="cite">Quelle: {esc(src)} — {esc(o.get("citation"))}</p></div>')
+              f'<p class="cite">Quelle: {src} — {esc(o.get("citation"))}{beleg}</p></div>')
 
     # Verlauf
     if asses:
@@ -163,7 +174,7 @@ def main() -> int:
                    else esc(a.get("relevance_general")))
             who = "KI" if str(a.get("draft_by", "")).startswith("ki:") else "Mensch"
             dr = f'{esc(a.get("draft_ring"))} → {esc(a.get("ring"))}' if a.get("draft_ring") != a.get("ring") else "—"
-            w(f'<tr><td>{esc(a.get("valid_from"))}</td><td><b>{ch} {esc(a.get("ring"))}</b></td>'
+            w(f'<tr><td>{ch_date(a.get("valid_from"))}</td><td><b>{ch} {esc(a.get("ring"))}</b></td>'
               f'<td>{esc(a.get("momentum"))}</td><td>{rel}</td><td>{who}: {dr}</td></tr>')
             prev = a.get("ring")
         w("</table>")
@@ -200,6 +211,9 @@ def main() -> int:
   .div{{color:{GOLD};font-size:13.5px;margin:10px 0 0}}
   .rat{{margin:10px 0 0;color:#4a4741}}
   .cite{{font-size:12px;color:#8a867e}}
+  .cite a{{color:{GOLD};text-decoration:none;border-bottom:1px solid rgba(192,133,31,.35)}}
+  .cite a:hover{{border-color:{GOLD}}}
+  .beleg{{white-space:nowrap;font-weight:500;border-bottom:none!important}}
   .limit{{background:#fff;border-left:3px solid {GOLD};padding:8px 12px;border-radius:4px}}
   .obs{{background:#fff;border:1px solid #e7e3da;border-radius:10px;padding:12px 14px;margin:8px 0}}
   .obs-h{{display:flex;justify-content:space-between;gap:12px;align-items:baseline}}
@@ -214,7 +228,7 @@ def main() -> int:
 <a class="back" href="index.html">← zum Radar</a>
 <p class="sig" style="margin-top:8px">Aletheia · Radar · Dossier</p>
 <h1>{esc(entry.get("name"))}</h1>
-<p class="sub">{esc(area)} · Ring <span class="ring">{esc(ring)}</span> ({esc(RING_MEAN.get(ring, ""))}) · aufgenommen {esc(entry.get("first_seen"))}</p>
+<p class="sub">{esc(area)} · Ring <span class="ring">{esc(ring)}</span> ({esc(RING_MEAN.get(ring, ""))}) · aufgenommen {ch_date(entry.get("first_seen"))}</p>
 {''.join(out)}
 <p class="note">{mode_note}. Erzeugt aus der Instanz mit view/detail.py — read-only.</p>
 </div></body></html>"""

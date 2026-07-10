@@ -19,6 +19,8 @@ from pathlib import Path
 
 import yaml
 
+from _fmt import ch_date
+
 CORE = Path(__file__).resolve().parent.parent
 RING_ORDER = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
 RING_MEAN = {"Watch": "beobachten", "Explore": "aktiv experimentieren",
@@ -122,7 +124,7 @@ def main() -> int:
 
     out: list[str] = []
     w = out.append
-    w(f"# KI-Radar — {frm} → {to}")
+    w(f"# KI-Radar — {ch_date(frm)} → {ch_date(to)}")
     w("")
     w("*Projektion über das Ereignisprotokoll und den aktuellen Radar-Stand (E21). "
       "Automatisch erzeugt mit view/report.py.*")
@@ -290,10 +292,10 @@ def main() -> int:
                if e.get("review_due") and e.get("review_due") <= to]
     if overdue:
         for name, due in sorted(overdue, key=lambda x: x[1]):
-            w(f"- **{name}** — überfällig seit {due}")
+            w(f"- **{name}** — überfällig seit {ch_date(due)}")
     else:
         nxt = sorted({e.get("review_due") for e in ents_asof if e.get("review_due")})
-        w(f"Keine überfällig. Nächste Prüftermine: {', '.join(nxt) if nxt else '—'}.")
+        w(f"Keine überfällig. Nächste Prüftermine: {', '.join(ch_date(d) for d in nxt) if nxt else '—'}.")
     w("")
 
     text = "\n".join(out)

@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from _fmt import ch_date
+
 CORE = Path(__file__).resolve().parent.parent
 GOLD, INK, PAPER = "#C0851F", "#23262D", "#F8F6F2"
 MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
@@ -105,7 +107,7 @@ def main() -> int:
             y, m = ym.split("-")
             periods.append((f"{MONTHS[int(m) - 1]} {y}", f"{ym}-01", f"{ym}-31"))
         to_total = max(dates[-1], today)   # deckt auch (synthetisch) zukünftige Daten ab
-        periods.append((f"Gesamt (seit {dates[0]})", dates[0], to_total))
+        periods.append((f"Gesamt (seit {ch_date(dates[0])})", dates[0], to_total))
 
     sections, options = [], []
     for i, (label, frm, to) in enumerate(periods):
@@ -113,7 +115,7 @@ def main() -> int:
         disp = "block" if i == 0 else "none"
         sections.append(f'<section data-period="{i}" style="display:{disp}">{body}</section>')
         options.append(f'<option value="{i}">{html.escape(label)} '
-                       f'({frm} → {to})</option>')
+                       f'({ch_date(frm)} → {ch_date(to)})</option>')
     if not sections:
         sections = ["<p>Noch keine Ereignisse erfasst.</p>"]
 

@@ -32,6 +32,11 @@ properties:
     type: string
     description: "Quelle/Zitat — Pflicht (E8)"
     minLength: 1
+  url:
+    type: string
+    description: "Deep-Link auf den exakten Beleg (Paper/Ankündigung/Spec). Optional."
+    format: uri
+    pattern: "^https?://"
   confidence:
     enum: [confirmed, likely, rumored]
   status:
