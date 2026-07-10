@@ -37,9 +37,19 @@ RING_MID = {"Adopt": 26, "Pilot": 75, "Explore": 119, "Watch": 157}
 CX, CY, RMAX = 340, 250, 175
 
 
+def _normalize(v):
+    if isinstance(v, dict):
+        return {k: _normalize(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_normalize(x) for x in v]
+    if isinstance(v, (datetime.datetime, datetime.date)):
+        return v.isoformat()
+    return v
+
+
 def load_yaml(path: Path):
     with path.open(encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+        return _normalize(yaml.safe_load(fh))
 
 
 def collect(base: Path, glob: str, key: str) -> list[dict]:
@@ -76,6 +86,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Radar-Ansicht (HTML) aus einer Instanz erzeugen.")
     ap.add_argument("--instance", required=True)
     ap.add_argument("--mode", choices=["internal", "public"], default="internal")
+    ap.add_argument("--as-of", dest="as_of", help="YYYY-MM-DD: Radar-Stand zu diesem Zeitpunkt (historisch)")
     ap.add_argument("--out", default=str(CORE / "view" / "output" / "radar.html"))
     args = ap.parse_args()
     inst = Path(args.instance)
@@ -101,9 +112,14 @@ def main() -> int:
     # Einträge + jüngstes Assessment.
     entries = collect(inst / "entries", "entry.yaml", "entries")
     assessments = collect(inst / "entries", "assessments.yaml", "assessments")
+    # Radar-Stand ZUM ZEITPUNKT --as-of (Standard: aktuell). Nur Assessments bis
+    # zum Stichtag; Ring = jüngstes Assessment as-of, nicht das absolut jüngste.
+    asof = args.as_of
     latest: dict[str, dict] = {}
     for a in assessments:
         rid = a.get("radar_entry_id")
+        if asof and a.get("valid_from", "") > asof:
+            continue
         if rid and (rid not in latest or a.get("valid_from", "") > latest[rid].get("valid_from", "")):
             latest[rid] = a
 
@@ -113,7 +129,12 @@ def main() -> int:
     for e in entries:
         if e.get("status") == "archived":
             continue
-        ring = e.get("current_ring")
+        if asof and (e.get("first_seen") or "") > asof:
+            continue                                   # existierte damals noch nicht
+        a_eff = latest.get(e["id"])
+        if asof and not a_eff:
+            continue                                   # damals noch nicht bewertet
+        ring = (a_eff.get("ring") if a_eff else None) or e.get("current_ring")
         aid = top_area(e.get("area", ""))
         if ring == "Reject":
             rejected.append(e)
@@ -189,6 +210,7 @@ def main() -> int:
             f'<div class="detail">{detail}</div></div>')
 
     stamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+    stand = f"Stand zum {asof} (historisch)" if asof else f"Stand {stamp}"
     mode_note = ("Öffentliche Ansicht (Allowlist, E26)" if args.mode == "public"
                  else "Interne Ansicht — enthält private Wertung (E25), nicht veröffentlichen")
 
@@ -294,7 +316,7 @@ def main() -> int:
 </style></head><body><div class="wrap">
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
-<p class="sub">Stand {stamp} · {len(placed)} Einträge</p>
+<p class="sub">{stand} · {len(placed)} Einträge</p>
 {country_sel}
 <p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a></p>
 {''.join(svg)}
