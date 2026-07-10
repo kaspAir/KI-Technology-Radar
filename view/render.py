@@ -282,9 +282,11 @@ def main() -> int:
         for e, a, *_ in sorted(placed, key=lambda t: order.get(t[0].get("current_ring"), 9)):
             for h in (a.get("historical_analogies") or []):
                 pl = esc(pattern_label.get(h.get("pattern"), h.get("pattern")))
+                mslug = str(h.get("pattern", "")).split(".", 1)[-1]
                 rows.append(
-                    f'<div class="mrow"><div class="mhead"><b>{esc(e.get("name"))}</b> ~ {pl}</div>'
-                    f'<div class="mlimit">Grenze: {esc(h.get("limit"))}</div></div>')
+                    f'<a class="mrow" href="detailmuster-{esc(mslug)}.html">'
+                    f'<div class="mhead"><b>{esc(e.get("name"))}</b> ~ {pl} <span class="arrow">→</span></div>'
+                    f'<div class="mlimit">Grenze: {esc(h.get("limit"))}</div></a>')
         if rows:
             muster = ('<h2>Historische Muster (Vergleich mit Gegenprobe)</h2>'
                       '<div class="muster">' + "".join(rows) + "</div>")
@@ -309,10 +311,12 @@ def main() -> int:
         for cid, (score, names) in ranked[:6]:
             label = comp_label.get(cid, cid)
             reco.append(label)
+            kslug = cid.split(".", 1)[-1]
             krows.append(
-                f'<div class="krow"><div><span class="kname">{esc(label)}</span> '
+                f'<a class="krow" href="detailkomp-{esc(kslug)}.html">'
+                f'<div><span class="kname">{esc(label)}</span> '
                 f'<span class="kdrv">{esc(", ".join(sorted(names)))}</span></div>'
-                f'<span class="kscore">{score}</span></div>')
+                f'<span class="kscore">{score}</span></a>')
         if krows:
             komp = ('<h2>Empfohlene Kompetenzentwicklung '
                     '<span class="ksub">nächste 6 Monate · aus den Daten abgeleitet (E15)</span></h2>'
@@ -336,9 +340,10 @@ def main() -> int:
             if not (crit >= 4 and (d == 0 or d < 0.4 * maxd)):
                 continue
             erows.append(
-                f'<div class="krow"><div><span class="kname">👁️ {esc(comp_label.get(cid, cid))}</span> '
+                f'<a class="krow" href="detailkomp-{esc(cid.split(".", 1)[-1])}.html">'
+                f'<div><span class="kname">👁️ {esc(comp_label.get(cid, cid))}</span> '
                 f'<span class="kdrv">Kritikalität {crit} · Nachfrage {d}</span></div>'
-                f'<span class="kscore">im Blick</span></div>')
+                f'<span class="kscore">im Blick</span></a>')
         if erows:
             erosion = ('<h2>Kritische Kompetenzen im Blick '
                        '<span class="ksub">hohe Kritikalität × wenig Nachfrage — Erosion/Lücke: siehe Bericht</span></h2>'
@@ -375,12 +380,15 @@ def main() -> int:
   .rej{{font-size:13px;color:#6b6862;margin:10px 0 0}}
   h2{{font-size:18px;font-weight:600;margin:24px 0 10px}}
   .muster{{display:flex;flex-direction:column;gap:10px}}
-  .mrow{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:12px 16px}}
+  .mrow{{display:block;background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:12px 16px;text-decoration:none;color:inherit;transition:border-color .12s}}
+  a.mrow:hover{{border-color:{GOLD}}}
   .mhead{{font-size:14px}}
+  .arrow{{color:{GOLD};float:right}}
   .mlimit{{font-size:13px;color:#6b6862;margin-top:3px;line-height:1.5}}
   .ksub{{font-size:13px;font-weight:400;color:#8a867e}}
   .komp{{display:flex;flex-direction:column;gap:8px}}
-  .krow{{display:flex;justify-content:space-between;align-items:baseline;background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:10px 16px}}
+  .krow{{display:flex;justify-content:space-between;align-items:baseline;background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:10px 16px;text-decoration:none;color:inherit;transition:border-color .12s}}
+  a.krow:hover{{border-color:{GOLD}}}
   .kname{{font-size:15px;font-weight:600}}
   .kdrv{{font-size:12px;color:#8a867e}}
   .kscore{{font-size:14px;font-weight:600;color:{GOLD}}}

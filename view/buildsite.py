@@ -40,21 +40,49 @@ def event_years(inst: Path) -> list[str]:
     return sorted(ys)
 
 
-def entry_ids(inst: Path) -> list[str]:
-    ids = []
-    base = inst / "entries"
+def _items(base: Path, glob: str, key: str):
+    """Alle Objekte aus allen passenden YAML-Dateien (Liste unter `key` oder Einzeldoc)."""
+    out = []
     if not base.exists():
-        return ids
-    for p in sorted(base.rglob("entry.yaml")):
+        return out
+    for p in sorted(base.rglob(glob)):
         try:
             d = yaml.safe_load(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        for e in (d.get("entries", []) if isinstance(d, dict) and "entries" in d
-                  else [d] if isinstance(d, dict) else d if isinstance(d, list) else []):
-            if isinstance(e, dict) and e.get("id"):
-                ids.append(e["id"])
-    return ids
+        if isinstance(d, dict) and key in d:
+            out.extend(d[key])
+        elif isinstance(d, dict):
+            out.append(d)
+        elif isinstance(d, list):
+            out.extend(d)
+    return out
+
+
+def entry_ids(inst: Path) -> list[str]:
+    return [e["id"] for e in _items(inst / "entries", "entry.yaml", "entries")
+            if isinstance(e, dict) and e.get("id")]
+
+
+def competence_ids(inst: Path) -> list[str]:
+    """Union: ratifizierte Kritikalitäten ∪ von Einträgen referenzierte Kompetenzen —
+    deckt genau die aus dem Radar verlinkbaren Kompetenz-Dossiers ab."""
+    ids = {c["competence_id"] for c in _items(inst / "competences", "*.yaml", "competence_assessments")
+           if isinstance(c, dict) and c.get("competence_id")}
+    for e in _items(inst / "entries", "entry.yaml", "entries"):
+        for cid in (e.get("competences") or []) if isinstance(e, dict) else []:
+            ids.add(cid)
+    return sorted(ids)
+
+
+def pattern_ids(inst: Path) -> list[str]:
+    """Von Einträgen (historical_analogies) referenzierte Muster — nur diese sind verlinkt."""
+    ids = set()
+    for a in _items(inst / "entries", "assessments.yaml", "assessments"):
+        for h in (a.get("historical_analogies") or []) if isinstance(a, dict) else []:
+            if h.get("pattern"):
+                ids.add(h["pattern"])
+    return sorted(ids)
 
 
 def run(script: str, *extra: str) -> None:
@@ -99,8 +127,24 @@ def main() -> int:
         run("detail.py", "--instance", str(inst), "--entry", eid,
             "--mode", args.mode, "--out", str(out / f"detail-{slug}.html"))
 
+    # Kompetenz- und Muster-Dossiers — nur intern (strategische/analytische Sicht,
+    # E25/E26; in der öffentlichen Ansicht existieren diese Panels nicht).
+    kids, pids = [], []
+    if args.mode == "internal":
+        kids = competence_ids(inst)
+        for cid in kids:
+            slug = cid.split(".", 1)[-1]
+            run("detailkomp.py", "--instance", str(inst), "--competence", cid,
+                "--mode", args.mode, "--out", str(out / f"detailkomp-{slug}.html"))
+        pids = pattern_ids(inst)
+        for pid in pids:
+            slug = pid.split(".", 1)[-1]
+            run("detailmuster.py", "--instance", str(inst), "--pattern", pid,
+                "--mode", args.mode, "--out", str(out / f"detailmuster-{slug}.html"))
+
     print(f"Site erzeugt in {out}: index.html + {len(snaps)} Jahres-Snapshots "
-          f"({', '.join(snaps) or '—'}) + bericht.html + {len(ids)} Detail-Dossiers")
+          f"({', '.join(snaps) or '—'}) + bericht.html + {len(ids)} Detail-Dossiers "
+          f"+ {len(kids)} Kompetenz- + {len(pids)} Muster-Dossiers")
     return 0
 
 
