@@ -17,3 +17,17 @@ terms:
   - {id: domain.bildung,                       taxonomy: domain, label: "Bildung",                        status: active, since: 2026-07-10}
   - {id: domain.hr,                            taxonomy: domain, label: "HR",                             status: active, since: 2026-07-10}
   - {id: domain.finanzen,                      taxonomy: domain, label: "Finanzen",                       status: active, since: 2026-07-10}
+  # --- Branchen (allgemeine Wirtschaftszweige), damit KI-Themen überall einsortierbar sind ---
+  - {id: domain.verkehr-mobilitaet,            taxonomy: domain, label: "Verkehr & Mobilität",            status: active, since: 2026-07-10}
+  - {id: domain.industrie-fertigung,          taxonomy: domain, label: "Industrie & Fertigung",          status: active, since: 2026-07-10}
+  - {id: domain.energie-umwelt,               taxonomy: domain, label: "Energie & Umwelt",               status: active, since: 2026-07-10}
+  - {id: domain.handel-konsum,                taxonomy: domain, label: "Handel & Konsum",                status: active, since: 2026-07-10}
+  - {id: domain.medien-kommunikation,         taxonomy: domain, label: "Medien & Kommunikation",         status: active, since: 2026-07-10}
+  - {id: domain.wissenschaft-forschung,       taxonomy: domain, label: "Wissenschaft & Forschung",       status: active, since: 2026-07-10}
+  - {id: domain.landwirtschaft,               taxonomy: domain, label: "Landwirtschaft",                 status: active, since: 2026-07-10}
+  - {id: domain.telekommunikation,            taxonomy: domain, label: "Telekommunikation",              status: active, since: 2026-07-10}
+  - {id: domain.versicherung,                 taxonomy: domain, label: "Versicherung",                   status: active, since: 2026-07-10}
+  - {id: domain.bau-immobilien,               taxonomy: domain, label: "Bau & Immobilien",               status: active, since: 2026-07-10}
+  - {id: domain.tourismus-gastgewerbe,        taxonomy: domain, label: "Tourismus & Gastgewerbe",        status: active, since: 2026-07-10}
+  - {id: domain.sicherheit-verteidigung,      taxonomy: domain, label: "Sicherheit & Verteidigung",      status: active, since: 2026-07-10}
+  - {id: domain.querschnitt-grundlagen,       taxonomy: domain, label: "Querschnitt / KI-Grundlagen",    status: active, since: 2026-07-10}

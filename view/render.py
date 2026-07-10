@@ -235,6 +235,9 @@ def main() -> int:
     stand = f"Stand zum {ch_date(asof)} (historisch)" if asof else f"Stand {stamp}"
     mode_note = ("Öffentliche Ansicht (Allowlist, E26)" if args.mode == "public"
                  else "Interne Ansicht — enthält private Wertung (E25), nicht veröffentlichen")
+    # Link zum Eingangskorb nur intern (Kandidaten sind unratifiziert, E4/E25).
+    kandlink = ('' if args.mode == "public"
+                else ' &nbsp;·&nbsp; <a href="kandidaten.html">Eingangskorb — Kandidaten nach Branche →</a>')
 
     # Länder-Umschalter (A1): navigiert zwischen den Länder-Radaren (je Land eine Instanz).
     cur_code = (country or {}).get("code")
@@ -397,7 +400,7 @@ def main() -> int:
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
 {country_sel} {tsel}
-<p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a></p>
+<p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}</p>
 {''.join(svg)}
 <div class="legend"><b>Ringe (innen→aussen):</b>
 <span><b>Adopt</b> produktiv nutzen</span><span><b>Pilot</b> real erproben</span>

@@ -117,20 +117,31 @@ def citation_for(item: dict) -> str:
 
 # --- Entwurf: Dry-Run (kostenlos) -------------------------------------------
 
-def draft_dry(item: dict, source_id: str, run_date: str) -> dict:
+def observation_of(item, source_id, run_date, created_by, title=None, summary=None, confidence="likely"):
     return {
         "id": f"obs.ingest-{slugify(item['arxiv_id'])}",
         "radar_entry_id": None,                 # bleibt im Korb bis Ratifikation
         "source_ids": [source_id],
-        "title": item["title"][:200],
-        "summary": (item["summary"][:400] + "…") if len(item["summary"]) > 400 else item["summary"],
+        "title": (title or item["title"])[:200],
+        "summary": summary or ((item["summary"][:400] + "…") if len(item["summary"]) > 400 else item["summary"]),
         "citation": citation_for(item),
         "url": item["url"],
-        "confidence": "likely",
+        "confidence": confidence,
         "status": "inbox",
         "date_published": item["published"] or run_date,
         "date_observed": run_date,
-        "created_by": "ki:ingest-dry",
+        "created_by": created_by,
+    }
+
+
+def draft_dry(item: dict, source_id: str, run_date: str) -> dict:
+    # Ohne Modell keine Branchen-Zuordnung möglich → Querschnitt als Platzhalter.
+    return {
+        "observation": observation_of(item, source_id, run_date, "ki:ingest-dry"),
+        "branchen": ["domain.querschnitt-grundlagen"],
+        "suggested_entry": "",
+        "relevance_general": None,
+        "reason": "dry-run: Rohentwurf ohne Bewertung/Branche",
     }
 
 
@@ -158,24 +169,29 @@ def draft_real(item, source_id, run_date, rubric, scope, model, max_tokens):
     """Ein Modellaufruf je Item. Das Modell bewertet Relevanz und entwirft — Zitat
     und URL kommen ZWINGEND aus dem Item (keine erfundenen Fundstellen, E8)."""
     system = (
-        "Du bist der Ingestion-Assistent eines KI-Technology-Radars für eine "
-        "Organisation im Schweizer öffentlichen Sektor. Du ENTWIRFST nur; ein "
-        "Mensch ratifiziert (E4). Erfinde nichts: Zitat und URL stammen unverändert "
-        "aus dem Item. Antworte AUSSCHLIESSLICH mit einem JSON-Objekt.\n\n"
-        "Bewertungsraster (verbindlich):\n" + rubric + "\n\n" + scope
+        "Du bist der Ingestion-Assistent eines KI-Technology-Radars. Du ENTWIRFST "
+        "nur; ein Mensch ratifiziert (E4). Erfinde nichts: Zitat und URL stammen "
+        "unverändert aus dem Item. Antworte AUSSCHLIESSLICH mit einem JSON-Objekt.\n\n"
+        "Aufnahme-Kriterium: Hat das Item mit KÜNSTLICHER INTELLIGENZ zu tun "
+        "(Methode, Modell, Anwendung, Governance, Wirkung)? Wenn JA → aufnehmen und "
+        "der/den passenden BRANCHE(N) zuordnen, auch wenn es eine Nische ist. Nur "
+        "wenn es NICHTS mit KI zu tun hat → verwerfen.\n\n"
+        "Bewertungsraster (für relevance_general / Einordnung):\n" + rubric + "\n\n" + scope
     )
     user = (
         "Item (arXiv):\n"
         f"Titel: {item['title']}\nAutoren: {', '.join(item['authors'][:6])}\n"
         f"Datum: {item['published']}\narXiv-ID: {item['arxiv_id']}\nURL: {item['url']}\n"
         f"Abstract: {item['summary'][:1500]}\n\n"
-        "Aufgabe: Ist das für diesen Radar relevant (Feld-Entwicklung, die eine "
-        "Beobachtung wert ist)? Gib JSON:\n"
-        '{"relevant": bool, "relevance_general": 1-5, "confidence": '
-        '"confirmed|likely|rumored", "title": "prägnanter Beobachtungstitel", '
-        '"summary": "2-3 Sätze, was neu/bedeutsam ist", "suggested_entry": '
-        '"bestehende entry.<id> ODER Vorschlag für neuen Eintragsnamen", '
-        '"reason": "kurze Begründung fürs Kuratieren"}'
+        "Aufgabe: Gib JSON:\n"
+        '{"ai_related": bool, "branchen": ["domain.<id>", …] (1-3 aus der Branchen-'
+        'Liste; wenn nichts speziell passt: ["domain.querschnitt-grundlagen"]), '
+        '"new_branche": "" (nur falls eine Branche fehlt: Vorschlag als Klartext), '
+        '"relevance_general": 1-5, "confidence": "confirmed|likely|rumored", '
+        '"title": "prägnanter deutscher Beobachtungstitel", '
+        '"summary": "2-3 Sätze, was neu/bedeutsam ist", '
+        '"suggested_entry": "bestehende entry.<id> ODER Vorschlag für neuen Eintragsnamen", '
+        '"reason": "kurze Begründung"}'
     )
     def extract(t: str):
         t = re.sub(r"```(?:json)?", "", t or "").strip()
@@ -196,24 +212,21 @@ def draft_real(item, source_id, run_date, rubric, scope, model, max_tokens):
             max_tokens)
         usage = {"input_tokens": usage.get("input_tokens", 0) + u2.get("input_tokens", 0),
                  "output_tokens": usage.get("output_tokens", 0) + u2.get("output_tokens", 0)}
-        verdict = extract(text2) or {"relevant": False, "reason": "keine JSON-Antwort (auch nach Nachschlag)"}
-    obs = None
-    if verdict.get("relevant"):
-        obs = {
-            "id": f"obs.ingest-{slugify(item['arxiv_id'])}",
-            "radar_entry_id": None,
-            "source_ids": [source_id],
-            "title": (verdict.get("title") or item["title"])[:200],
-            "summary": verdict.get("summary") or item["summary"][:400],
-            "citation": citation_for(item),
-            "url": item["url"],
-            "confidence": verdict.get("confidence", "likely"),
-            "status": "inbox",
-            "date_published": item["published"] or run_date,
-            "date_observed": run_date,
-            "created_by": f"ki:{model}",
+        verdict = extract(text2) or {"ai_related": False, "reason": "keine JSON-Antwort (auch nach Nachschlag)"}
+    cand = None
+    if verdict.get("ai_related"):
+        branchen = [b for b in (verdict.get("branchen") or []) if isinstance(b, str) and b.startswith("domain.")]
+        cand = {
+            "observation": observation_of(item, source_id, run_date, f"ki:{model}",
+                                          title=verdict.get("title"), summary=verdict.get("summary"),
+                                          confidence=verdict.get("confidence", "likely")),
+            "branchen": branchen or ["domain.querschnitt-grundlagen"],
+            "new_branche": verdict.get("new_branche") or "",
+            "suggested_entry": verdict.get("suggested_entry") or "",
+            "relevance_general": verdict.get("relevance_general"),
+            "reason": verdict.get("reason") or "",
         }
-    return obs, verdict, usage
+    return cand, verdict, usage
 
 
 # --- Schema-Leichtprüfung der Entwürfe ---------------------------------------
@@ -268,14 +281,18 @@ def main() -> int:
     items = fetch_arxiv(args.arxiv_query, args.since, args.max_items, args.source_file)
     print(f"Geholt: {len(items)} Items (arXiv, seit {args.since or 'Anfang'})")
 
+    # Bekannte Branchen (domain-Taxonomie) — für Prompt UND Validierung der Zuordnung.
+    domains = collect(CORE / "vocab-core", "domain.yaml", "terms")
+    known_branchen = {t["id"] for t in domains}
+
     rubric = scope = ""
     if not args.dry_run:
         rub = inst / "agents" / "bewertungsraster.md"
         rubric = rub.read_text(encoding="utf-8") if rub.exists() else ""
         comps = collect(CORE / "vocab-core", "competence.yaml", "terms")
-        areas = collect(CORE / "vocab-core", "area.yaml", "terms")
         ents = collect(inst / "entries", "entry.yaml", "entries")
-        scope = ("Kontext:\nBereiche: " + ", ".join(t["id"] for t in areas)
+        scope = ("Kontext:\nBRANCHEN (wähle daraus für 'branchen'):\n"
+                 + "\n".join(f'  {t["id"]} — {t.get("label")}' for t in domains)
                  + "\nKompetenzen: " + ", ".join(t["id"] for t in comps)
                  + "\nBestehende Einträge: "
                  + ", ".join(f'{e["id"]} ({e.get("name")})' for e in ents))
@@ -287,7 +304,7 @@ def main() -> int:
         print("Hinweis: --max-cost-usd ohne --price-in/--price-out unwirksam "
               "(Kosten unbekannt) — es greift nur der Token-Deckel.")
 
-    drafts, report_rows = [], []
+    cands, report_rows = [], []
     tok_in = tok_out = 0
     for it in items:
         if not args.dry_run and tok_out >= args.max_output_tokens:
@@ -298,40 +315,43 @@ def main() -> int:
             report_rows.append(("—", it["title"][:60], f"GESTOPPT (Kosten-Deckel ${args.max_cost_usd:.2f})"))
             break
         if args.dry_run:
-            o = draft_dry(it, args.source, args.run_date)
-            verdict = {"relevant": True, "reason": "dry-run: Rohentwurf ohne Bewertung"}
+            c = draft_dry(it, args.source, args.run_date)
+            verdict = {"ai_related": True, "reason": "dry-run"}
         else:
             try:
-                o, verdict, usage = draft_real(it, args.source, args.run_date, rubric,
+                c, verdict, usage = draft_real(it, args.source, args.run_date, rubric,
                                                scope, args.model, 1024)
             except Exception as ex:  # ein Fehler darf den Lauf nicht abbrechen
                 report_rows.append(("!", it["title"][:60], f"Fehler: {ex}"))
                 continue
             tok_in += usage.get("input_tokens", 0)
             tok_out += usage.get("output_tokens", 0)
-        if o:
-            err = obs_ok(o)
+        if c:
+            err = obs_ok(c["observation"])
             if err:
                 report_rows.append(("✗", it["title"][:60], f"Entwurf ungültig: {err}"))
                 continue
-            drafts.append(o)
+            # unbekannte Branchen aussortieren; leere → Querschnitt (nichts erfinden)
+            c["branchen"] = [b for b in c["branchen"] if b in known_branchen] or ["domain.querschnitt-grundlagen"]
+            cands.append(c)
+            br = ", ".join(b.split(".", 1)[-1] for b in c["branchen"])
             report_rows.append(("✓", it["title"][:60],
-                                f'rel {verdict.get("relevance_general", "—")} → {verdict.get("suggested_entry", "?")}'))
+                                f'[{br}] rel {c.get("relevance_general", "—")} → {c.get("suggested_entry") or "?"}'))
         else:
-            report_rows.append(("·", it["title"][:60], f'verworfen: {verdict.get("reason", "")[:50]}'))
+            report_rows.append(("·", it["title"][:60], f'kein KI-Bezug: {verdict.get("reason", "")[:50]}'))
 
     outdir.mkdir(parents=True, exist_ok=True)
     stamp = f"{args.run_date}-{'dry' if args.dry_run else slugify(args.model)}"
-    if drafts:
+    if cands:
         obs_path = outdir / f"ingest-{stamp}.yaml"
-        obs_path.write_text(yaml.safe_dump({"observations": drafts}, allow_unicode=True,
+        obs_path.write_text(yaml.safe_dump({"candidates": cands}, allow_unicode=True,
                                            sort_keys=False), encoding="utf-8")
     # Laufbericht: ehrliche Bilanz (Items, Entwürfe, Tokens, geschätzte Kosten).
     cost = (tok_in / 1e6) * args.price_in + (tok_out / 1e6) * args.price_out
     lines = [f"# Ingestion-Lauf {stamp}", "",
              f"- Quelle: {args.source} · Query: `{args.arxiv_query}` · seit {args.since or 'Anfang'}",
              f"- Modus: {'DRY-RUN (kostenlos)' if args.dry_run else args.model}",
-             f"- Items geholt: {len(items)} · Entwürfe: {len(drafts)}",
+             f"- Items geholt: {len(items)} · Kandidaten: {len(cands)}",
              f"- Deckel: max_items {args.max_items}, max_output_tokens {args.max_output_tokens}",
              f"- Tokens: {tok_in} in / {tok_out} out"
              + (f" · geschätzte Kosten: ${cost:.4f}" if (args.price_in or args.price_out)
@@ -340,7 +360,7 @@ def main() -> int:
     lines += [f"| {a} | {b} | {c} |" for a, b, c in report_rows]
     (outdir / f"ingest-{stamp}-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    print(f"Entwürfe: {len(drafts)} → {outdir}")
+    print(f"Kandidaten: {len(cands)} → {outdir}")
     print(f"Tokens: {tok_in} in / {tok_out} out"
           + (f" · ~${cost:.4f}" if (args.price_in or args.price_out) else ""))
     print(f"Bericht: {outdir / f'ingest-{stamp}-report.md'}")

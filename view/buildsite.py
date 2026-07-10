@@ -120,6 +120,10 @@ def main() -> int:
     # Bericht-Seite mit Zeitraum-Wähler
     run("reportsite.py", "--instance", str(inst), "--out", str(out / "bericht.html"))
 
+    # Eingangskorb / Kandidaten-Ansicht (branche-filterbar) — nur intern (E25).
+    if args.mode == "internal":
+        run("kandidaten.py", "--instance", str(inst), "--out", str(out / "kandidaten.html"))
+
     # Detail-Dossier je Eintrag (detail-<slug>.html) — Ziel der Blip-/Karten-Links.
     ids = entry_ids(inst)
     for eid in ids:

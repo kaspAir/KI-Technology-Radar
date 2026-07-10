@@ -237,7 +237,19 @@ def main() -> int:
             valid_ref(ref, "method", f"entry {eid}.methods")
 
     # --- Observations (Instanz) -------------------------------------------------
-    observations = yaml_docs(inst / "entries", "observations.yaml", "observations") + yaml_docs(inst / "inbox", "*.yaml", "observations")
+    # Eingangskorb kennt zwei Formen: klassisch `observations:` und der
+    # Ingestion-Agent-Kandidat `candidates: [{observation: …, branchen: …}]`.
+    inbox_obs: list[dict] = []
+    inbox_dir = inst / "inbox"
+    if inbox_dir.exists():
+        for p in sorted(inbox_dir.rglob("*.yaml")):
+            d = load_yaml(p)
+            if isinstance(d, dict) and "observations" in d:
+                inbox_obs.extend(d["observations"])
+            elif isinstance(d, dict) and "candidates" in d:
+                inbox_obs.extend(c["observation"] for c in d["candidates"]
+                                 if isinstance(c, dict) and isinstance(c.get("observation"), dict))
+    observations = yaml_docs(inst / "entries", "observations.yaml", "observations") + inbox_obs
     for o in observations:
         if not check(schemas["observation"], o, f"observation {o.get('id', '?')}", rep):
             continue
