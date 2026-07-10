@@ -46,17 +46,42 @@ Gute Entwürfe aus `inbox/ingest-*.yaml` in einen Eintrag unter `entries/` heben
 (Beobachtung + Assessment + `entry.created`/`ring.changed`-Events), Rest löschen.
 Validieren (`python radar.py validate --instance …`), Site bauen, deployen.
 
-## 4. Serverbetrieb (läuft ohne deinen Laptop)
+## 4. Serverbetrieb — Cron auf dem Infomaniak-Host (läuft ohne Laptop)
 
-Als geplanter Job auf dem geteilten Host — zwei Wege:
+WICHTIG: Jenkins läuft lokal (Docker auf dem Laptop). Für echten Laptop-freien
+Betrieb läuft die nächtliche Ingestion **auf dem Host** (immer an, hat Python +
+Key + ist das Deploy-Ziel). Skript: `deploy/host-ingest.sh` (Repos aktualisieren →
+Korb leeren → ingestieren → validieren → Site bauen → in den dev-Docroot spiegeln).
 
-- **Jenkins (empfohlen, passt zur bestehenden CI):** neuer Job auf dem
-  **privaten Instanz-Repo**, Trigger `cron('H 3 * * *')` (nächtlich). Stage ruft
-  `ingest.py` (Kern via Checkout/Klon), committet die neuen `inbox/`-Dateien ins
-  Instanz-Repo. `ANTHROPIC_API_KEY` als Jenkins-Credential, Deckel als Job-Parameter.
-  Der Job deployt NICHT und hebt nichts in den Radar — er füllt nur den Korb.
-- **Cron auf dem Host:** `crontab` ruft ein Skript, das Kern+Instanz aktualisiert,
-  `ingest.py` startet und den Korb ins Instanz-Repo committet.
+### Einmalige Einrichtung (per SSH auf dem Host)
 
-Der Agent schreibt ausschliesslich in `inbox/` — nie in `entries/` oder ins
-Event-Protokoll. So bleibt „Sammeln ≠ Geltung" (E20) auch im Automatikbetrieb wahr.
+```bash
+# 1) Read-Deploy-Key fürs PRIVATE Instanz-Repo
+ssh-keygen -t ed25519 -f ~/.ssh/ki-radar -N ""
+cat ~/.ssh/ki-radar.pub    # -> GitHub: Instanz-Repo > Settings > Deploy keys > Add (read-only)
+printf 'Host github.com\n  IdentityFile ~/.ssh/ki-radar\n' >> ~/.ssh/config
+
+# 2) Repos anlegen
+mkdir -p ~/ki-radar && cd ~/ki-radar
+git clone --depth 1 -b dev https://github.com/kaspAir/KI-Technology-Radar core
+git clone -b dev git@github.com:kaspAir/KI-Technology-Radar-Instanz.git instance
+
+# 3) Anthropic-Key in geschützte Datei (NICHT ins Repo)
+printf 'export ANTHROPIC_API_KEY=sk-ant-...\n' > ~/.ki-radar-env && chmod 600 ~/.ki-radar-env
+
+# 4) Testlauf von Hand (prüft Python/venv/Netz/Docroot)
+bash ~/ki-radar/core/deploy/host-ingest.sh
+```
+
+Docroot ggf. anpassen: `export KI_RADAR_DOCROOT=…` (Default = dev.ki-tech-radar.ch-Pfad).
+Für einen grösseren Erstlauf: `KI_RADAR_SINCE_DAYS=365 KI_RADAR_MAX_ITEMS=80 bash …/host-ingest.sh`.
+
+### Cron eintragen (Infomaniak: Cron-Manager oder `crontab -e`)
+
+```
+0 3 * * *  bash $HOME/ki-radar/core/deploy/host-ingest.sh >> $HOME/ki-radar/ingest.log 2>&1
+```
+
+Der Host pullt vor jedem Lauf das Instanz-Repo → deine lokal ratifizierten Einträge
+(via `src/ratify.py` + push) landen automatisch im nächtlichen Build. Der Agent
+schreibt nur in `inbox/` (E4/E20). Jenkins bleibt für manuelle dev/test/int/main-Builds.
