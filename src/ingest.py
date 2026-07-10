@@ -225,6 +225,8 @@ def main() -> int:
     ap.add_argument("--since", default="", help="YYYY-MM-DD: nur Items ab diesem Datum")
     ap.add_argument("--max-items", type=int, default=15, help="harter Deckel: max. Items")
     ap.add_argument("--max-output-tokens", type=int, default=20000, help="harter Deckel: Summe Output-Tokens")
+    ap.add_argument("--max-cost-usd", type=float, default=0.0,
+                    help="harter Kosten-Deckel in USD (braucht --price-in/--price-out); 0 = aus")
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--price-in", type=float, default=0.0, help="USD je 1M Input-Tokens (für die Kostenbilanz)")
     ap.add_argument("--price-out", type=float, default=0.0, help="USD je 1M Output-Tokens")
@@ -261,11 +263,22 @@ def main() -> int:
                  + "\nBestehende Einträge: "
                  + ", ".join(f'{e["id"]} ({e.get("name")})' for e in ents))
 
+    def running_cost() -> float:
+        return (tok_in / 1e6) * args.price_in + (tok_out / 1e6) * args.price_out
+
+    if args.max_cost_usd and not (args.price_in or args.price_out):
+        print("Hinweis: --max-cost-usd ohne --price-in/--price-out unwirksam "
+              "(Kosten unbekannt) — es greift nur der Token-Deckel.")
+
     drafts, report_rows = [], []
     tok_in = tok_out = 0
     for it in items:
         if not args.dry_run and tok_out >= args.max_output_tokens:
             report_rows.append(("—", it["title"][:60], "GESTOPPT (Token-Deckel)"))
+            break
+        if (not args.dry_run and args.max_cost_usd and (args.price_in or args.price_out)
+                and running_cost() >= args.max_cost_usd):
+            report_rows.append(("—", it["title"][:60], f"GESTOPPT (Kosten-Deckel ${args.max_cost_usd:.2f})"))
             break
         if args.dry_run:
             o = draft_dry(it, args.source, args.run_date)
