@@ -1,0 +1,7 @@
+sources:
+  - id: source.beispiel-research
+    name: "Beispiel-Forschungsquelle (synthetisch)"
+    type: research
+    url: "https://example.org/research"
+    trust_level: medium
+    cadence: monthly

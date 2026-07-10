@@ -1,0 +1,55 @@
+# Umgebungen, Branches und Promotion
+
+Der Radar folgt dem Vier-Umgebungen-Modell des Suite-Testkonzepts (Kap. 3) und
+einer streng sequenziellen Promotion mit Freigabe-Toren.
+
+## Branch → Umgebung → URL
+
+| Branch | Umgebung | Auslegung (Kap. 3) | URL |
+|--------|----------|--------------------|-----|
+| `dev`  | dev  | nur Entwickler, klein, Schnittstellen gemockt | https://dev.ki-tech-radar.ch |
+| `test` | test | internes exploratives Testen (BKI AG), gemockt | http://test.ki-tech-radar.ch |
+| `int`  | int  | Produktions-Spiegel, echte Schnittstellen; Kunde testet & nimmt ab | *(URL noch offen)* |
+| `main` | prod | Produktivbetrieb; nur Smoke/Health | *(URL noch offen)* |
+
+## Promotion — sequenziell, mit Freigabe (nie eine Stufe überspringen)
+
+```
+dev  --(dev grün + Freigabe)-->  test  --(Freigabe)-->  int  --(Freigabe)-->  main/prod
+```
+
+- **dev:** Erste Anlaufstelle. „Grün" = die schnelle deterministische Suite in der
+  Jenkins-Pipeline ist bestanden und das Testprotokoll liegt vor.
+- **test:** Erst nach ausdrücklicher Freigabe. Internes exploratives Testen.
+- **int:** Erst nach Freigabe. Zwei Phasen mit internem Tor (Kap. 7): Phase 1 =
+  interne Validierung gegen echte Umsysteme (Systemintegration, Performance,
+  dynamische Sicherheit); erst wenn das Protokoll grün und signiert ist, beginnt
+  Phase 2 = Kunde testet explorativ und nimmt ab.
+- **main/prod:** Erst nach Freigabe. Kein Testbetrieb — nur nicht-destruktive
+  Smoke- und Health-Checks (Kap. 17).
+
+## Testarten je Umgebung (verbindliche Referenz, Kap. 6)
+
+| Testart | dev | test | int | prod |
+|---|---|---|---|---|
+| Unit / Komponente | ✓ | ✓ | ✓ | – |
+| Kontrakt (gg. Mock) | ✓ | ✓ | – | – |
+| Fachlich | ✓ Mock | ✓ Mock | ✓ real | – |
+| Systemintegration (echt) | – | – | ✓ | – |
+| Performance / Last | – | – | ✓ | – |
+| Sicherheit statisch | ✓ | ✓ | ✓ | – |
+| Sicherheit dynamisch / Pentest | – | – | ✓ | – |
+| Exploratives Testen | – | BKI | Kunde | – |
+| Abnahme | – | – | Kunde | – |
+| Smoke / Health | – | – | ✓ | ✓ |
+
+## Offene Infrastruktur-Punkte (Betreiber)
+
+- URLs für **int** und **prod** festlegen.
+- **Deploy-Mechanismus** je Umgebung (Jenkins-Credential `ki-tech-radar-deploy`).
+- Jenkins **Multibranch-Pipeline** auf die vier Branches; Branch-Protection so,
+  dass Promotion nur nach grüner Suite + Freigabe möglich ist.
+- Der Radar hat in R1 **noch keinen laufenden Dienst** (YAML-first, keine UI vor
+  stabilem Schema — E1). Bis dahin ist „Deploy" primär: validierte Daten +
+  Testprotokoll bereitstellen; eine ausspielbare Ansicht kommt in einem späteren
+  Release.

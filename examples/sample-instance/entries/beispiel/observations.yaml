@@ -1,0 +1,14 @@
+observations:
+  - id: obs.beispiel-signal
+    radar_entry_id: entry.beispiel
+    source_ids: [source.beispiel-research]
+    title: "Synthetisches Beispielsignal"
+    summary: >-
+      Ein erfundenes Beispielsignal, das nur zeigt, wie eine Beobachtung an einen
+      Eintrag andockt. Keine reale Aussage.
+    citation: "Beispielquelle (synthetisch), 2026"
+    confidence: likely
+    status: linked
+    date_published: 2026-06-01
+    date_observed: 2026-07-10
+    created_by: "mensch:beispiel"

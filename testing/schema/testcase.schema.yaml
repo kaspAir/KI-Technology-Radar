@@ -1,0 +1,46 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "testcase.schema.yaml"
+title: Testcase
+description: >-
+  Geteiltes Schema für Testfälle (Testkonzept Kap. 11, ADR-T05). Konfiguration
+  vor Programmierung: Testfälle werden als YAML je Produkt gepflegt, das Schema
+  ist Teil des geteilten Werkzeugs. Ein Testfall trägt Stufe, Umgebung(en),
+  Schnittstellenmodus, Vorbedingung und erwartetes Ergebnis.
+type: object
+additionalProperties: false
+required: [id, stufe, umgebungen, schnittstellen, erwartet, reproduzierbar]
+properties:
+  id:
+    type: string
+    description: "z.B. kern-integritaet-0002"
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*-[0-9]{4}$"
+  titel:
+    type: string
+  produkt:
+    type: string
+    description: "welchem Produkt der Suite der Fall gehört (dezentrales Eigentum)"
+  requirement:
+    type: string
+    description: "Traceability: Anforderung/ADR, die der Fall abdeckt (Kap. 14)"
+  stufe:
+    enum: [unit, kontrakt, system, abnahme]
+  umgebungen:
+    type: array
+    minItems: 1
+    items: {enum: [dev, test, int, prod]}
+  schnittstellen:
+    description: "mock | real — real nur auf int (Testart folgt Umgebungstreue, ADR-T02)"
+    enum: [mock, real]
+  vorbedingung:
+    type: string
+  schritte:
+    type: array
+    items: {type: string}
+  erwartet:
+    type: string
+    minLength: 1
+  reproduzierbar:
+    type: boolean
+  seed:
+    description: "festgehaltener Seed für materialisierte explorative Funde (ADR-T07)"
+    type: [string, integer, "null"]

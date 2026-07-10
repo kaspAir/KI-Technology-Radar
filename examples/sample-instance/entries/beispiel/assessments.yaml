@@ -1,0 +1,32 @@
+assessments:
+  - id: assess.beispiel-001
+    radar_entry_id: entry.beispiel
+    decided_at: "2026-07-10T12:00:00+02:00"
+    valid_from: 2026-07-10
+    draft_by: "mensch:beispiel"
+    draft_ring: Explore
+    draft_arguments:
+      opportunities:
+        - statement: "Synthetische Chance, nur zur Schema-Demonstration."
+          citation: obs.beispiel-signal
+      risks:
+        - statement: "Synthetisches Risiko, nur zur Schema-Demonstration."
+          citation: obs.beispiel-signal
+      affected_domains: [domain.ki-entwicklung]
+      affected_competences: [competence.evaluation]
+      affected_methods: []
+    draft_rationale: "Erfundene Begründung zur Demonstration des Entwurfsfelds."
+    time_horizon: mid
+    momentum: steady
+    relevance_general: 3
+    relevance_org: 2
+    action_pressure: low
+    ring: Explore
+    rationale: "Synthetische Endfassung — PRIVAT-Feld, hier nur Beispiel."
+    reviewer: "mensch:beispiel"
+    historical_analogies:
+      - pattern: pattern.hype-zyklus
+        similarity: "Erfundene Ähnlichkeit zur Demonstration."
+        what_happened: "Erfundener Verlauf."
+        lesson: "Erfundene Lehre."
+        limit: "Erfundene Grenze — hier endet der Vergleich."

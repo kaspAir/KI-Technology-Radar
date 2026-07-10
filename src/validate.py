@@ -41,6 +41,13 @@ except ImportError:
 CORE = Path(__file__).resolve().parent.parent
 RING_ORDER = ["Watch", "Explore", "Pilot", "Adopt", "Reject"]
 
+# Konsolenausgabe plattformunabhängig auf UTF-8 (Windows-Konsole ist cp1252).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 
 class Report:
     def __init__(self) -> None:

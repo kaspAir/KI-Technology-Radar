@@ -1,0 +1,6 @@
+# Laufzeit-/Testabhängigkeiten des Kern-Mechanismus (bewusst schlank).
+pyyaml>=6.0
+jsonschema>=4.20
+pytest>=8.0
+# Optional für den statischen Security-Scan (Kap. 4, SAST/Dependency):
+# pip-audit>=2.7

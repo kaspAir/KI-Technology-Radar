@@ -31,11 +31,15 @@ Die vollständige Begründung steht in [docs/design-entscheidungen.md](docs/desi
 ## Aufbau des Kerns
 
 ```
-/docs         Konzept, Architektur, Designentscheidungen
+/docs         Konzept, Architektur, Designentscheidungen, Umgebungen & Branches
 /schema       Schema-Definitionen (JSON Schema, als YAML)
 /vocab-core   Starter-Taxonomien (Bereiche, Domänen, Kompetenzen, Methoden, Tech-Tags)
 /patterns     Muster-Bibliothek für historische Vergleiche
+/examples     Beispiel-Instanz (öffentlich, synthetisch) — Selbsttest des Kerns
+/testing      Testkonzept-Umsetzung: Testfall-/Protokoll-Schema, Suite, pytest
 /src          validate.py — validiert Daten gegen das Schema (Werkzeug, nicht Produkt)
+Jenkinsfile   CI-Pipeline (schnelle Suite pro Build, Deploy je Umgebung)
+Dockerfile    reproduzierbares Testimage
 LICENSE
 ```
 
@@ -67,11 +71,26 @@ Der Kern liest sein Datenverzeichnis aus der Konfiguration:
 python src/validate.py --instance ../KI-Technology-Radar-Instanz
 ```
 
+## Testen & Umgebungen
+
+Der Radar folgt dem **Suite-Testkonzept** (deterministischer Runner, KI nur für
+Sprache, Testart folgt Umgebungstreue). Bei jedem Build läuft die schnelle Suite
+und erzeugt ein versioniertes **Testprotokoll**:
+
+```bash
+python testing/run_suite.py --env dev --instance examples/sample-instance
+```
+
+Vier Umgebungen und die Branch-Promotion (`dev → test → int → main/prod`) sind in
+[docs/umgebungen-und-branches.md](docs/umgebungen-und-branches.md) beschrieben,
+die Testkonzept-Umsetzung in [testing/README.md](testing/README.md).
+
 ## Stand
 
 Release **R1**: Taxonomien + Ereignisprotokoll ab Eintrag 1 + ein von Hand
-ausgefüllter Eintrag (Model Context Protocol). Der Release-Plan steht in den
-Designentscheidungen.
+ausgefüllter Eintrag (Model Context Protocol). Zusätzlich die Testkonzept-
+Grundlage (Schritt 1–2: Testfall-/Protokoll-Schema, schnelle Suite, CI-Pipeline).
+Der Release-Plan steht in den Designentscheidungen.
 
 ## Lizenz
 

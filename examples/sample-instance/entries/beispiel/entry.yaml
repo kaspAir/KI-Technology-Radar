@@ -1,0 +1,12 @@
+# Synthetischer Beispiel-Eintrag — keine echten Daten.
+id: entry.beispiel
+name: "Beispiel-Technologie (synthetisch)"
+area: area.forschung
+tech_tags: [tech_tag.rag, tech_tag.llm]
+domains: [domain.ki-entwicklung, domain.wissensmanagement]
+competences: [competence.evaluation, competence.context-engineering]
+methods: []
+first_seen: 2026-07-10
+current_ring: Explore   # abgeleitet aus assess.beispiel-001
+review_due: 2026-10-10
+status: active

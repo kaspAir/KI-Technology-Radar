@@ -1,0 +1,6 @@
+# Synthetisches Beispiel-Protokoll (JSON Lines).
+{"id":"evt.b-0001","at":"2026-07-10T11:50:00+02:00","actor":"mensch:beispiel","verb":"observation.added","subject_id":"obs.beispiel-signal","payload":"Beispielsignal erfasst"}
+{"id":"evt.b-0002","at":"2026-07-10T11:55:00+02:00","actor":"mensch:beispiel","verb":"entry.created","subject_id":"entry.beispiel","payload":"Beispiel-Eintrag angelegt"}
+{"id":"evt.b-0003","at":"2026-07-10T11:56:00+02:00","actor":"mensch:beispiel","verb":"observation.linked","subject_id":"obs.beispiel-signal","payload":{"to":"entry.beispiel"}}
+{"id":"evt.b-0004","at":"2026-07-10T12:00:00+02:00","actor":"mensch:beispiel","verb":"assessment.ratified","subject_id":"assess.beispiel-001","payload":"Ratifiziert (Beispiel)"}
+{"id":"evt.b-0005","at":"2026-07-10T12:00:00+02:00","actor":"mensch:beispiel","verb":"ring.changed","subject_id":"entry.beispiel","payload":{"from":null,"to":"Explore"}}

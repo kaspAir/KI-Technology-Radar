@@ -1,0 +1,5 @@
+identities:
+  - reviewer_id: "mensch:beispiel"
+    person: "Beispiel-Person (synthetisch)"
+    role: "Beispiel"
+    since: 2026-07-10

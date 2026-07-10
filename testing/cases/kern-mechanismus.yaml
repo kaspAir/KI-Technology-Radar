@@ -1,0 +1,58 @@
+# Testfall-Katalog des Kern-Mechanismus (dezentrales Produkteigentum, ADR-T05).
+# Stufe unit/kontrakt, reproduzierbar, gegen Mock/Fixtures — läuft in dev/test.
+# Jeder Fall ist als deterministischer pytest-Test in testing/tests/ materialisiert
+# (Traceability über die id). Die Ausführung entscheidet der Runner, nie ein Agent (ADR-T01).
+testcases:
+  - id: kern-schema-0001
+    titel: "Term mit ungültiger ID wird abgewiesen"
+    produkt: "KI-Technology-Radar (Kern)"
+    requirement: "E7 kontrolliertes Vokabular / Schema term"
+    stufe: unit
+    umgebungen: [dev, test, int]
+    schnittstellen: mock
+    vorbedingung: "term.schema geladen"
+    schritte:
+      - "Term mit id 'Domain.Falsch' (Grossbuchstaben) gegen term.schema prüfen"
+    erwartet: "Validierung schlägt fehl (Pattern verletzt)"
+    reproduzierbar: true
+
+  - id: kern-integritaet-0002
+    titel: "Eintrag mit unbekannter Term-Referenz wird als Fehler erkannt"
+    produkt: "KI-Technology-Radar (Kern)"
+    requirement: "E7 / referenzielle Integrität"
+    stufe: kontrakt
+    umgebungen: [dev, test, int]
+    schnittstellen: mock
+    vorbedingung: "Beispiel-Instanz mit einem Eintrag"
+    schritte:
+      - "tech_tags um 'tech_tag.nonexistent' ergänzen"
+      - "validate.py ausführen"
+    erwartet: "Exit-Code 1 und Fehlermeldung 'unbekannter Term'"
+    reproduzierbar: true
+
+  - id: kern-ring-0003
+    titel: "Inkonsistenter current_ring erzeugt Warnung"
+    produkt: "KI-Technology-Radar (Kern)"
+    requirement: "E3 / abgeleitet-aber-gespeichert Guardrail"
+    stufe: kontrakt
+    umgebungen: [dev, test, int]
+    schnittstellen: mock
+    vorbedingung: "Eintrag mit Assessment (Ring Pilot)"
+    schritte:
+      - "entry.current_ring auf 'Adopt' setzen"
+      - "validate.py ausführen"
+    erwartet: "Warnung zur Abweichung; Exit-Code 0 (kein Fehler)"
+    reproduzierbar: true
+
+  - id: kern-datum-0004
+    titel: "YAML-Datumswerte werden zu ISO-Strings normalisiert"
+    produkt: "KI-Technology-Radar (Kern)"
+    requirement: "Loader-Normalisierung"
+    stufe: unit
+    umgebungen: [dev, test, int]
+    schnittstellen: mock
+    vorbedingung: "keine"
+    schritte:
+      - "Mapping mit date/datetime durch _normalize schicken"
+    erwartet: "date/datetime als ISO-8601-Strings"
+    reproduzierbar: true

@@ -1,0 +1,91 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "protocol.schema.yaml"
+title: Testprotokoll
+description: >-
+  Das eigentliche Ergebnis eines Testlaufs (Testkonzept Kap. 12): reproduzierbar,
+  versioniert, auditierbar. Liegt auf dem Governance-Mixin (created_at,
+  updated_at, version, created_by, status) und weist explizit aus, welche
+  Testarten mit welchem Ergebnis liefen — inkl. Umgebung und Schnittstellenmodus
+  (Mock vs. real), damit keine Scheinsicherheit entsteht (ADR-T03).
+type: object
+additionalProperties: false
+required:
+  [id, created_at, updated_at, version, created_by, status,
+   suite, environment, interfaces, testarten]
+properties:
+  # --- Governance-Mixin (Kap. 12) ---
+  id:
+    type: string
+    pattern: "^protokoll-[a-z]+-[0-9TZ:.+-]+$"
+  created_at: {type: string, format: date-time}
+  updated_at: {type: string, format: date-time}
+  version: {type: string}
+  created_by:
+    description: "deterministischer Runner, NIE ein Agent (ADR-T01)"
+    type: string
+    pattern: "^runner:.+$"
+  status:
+    description: "Gesamtergebnis des Laufs"
+    enum: [bestanden, fehlgeschlagen]
+
+  suite:
+    type: object
+    additionalProperties: false
+    required: [name, version]
+    properties:
+      name: {type: string}
+      version: {type: string}
+  commit:
+    description: "Git-Commit, gegen den geprüft wurde (Herkunft)"
+    type: [string, "null"]
+  environment:
+    enum: [dev, test, int, prod]
+  interfaces:
+    description: "mock | real — real nur auf int (ADR-T02/T03)"
+    enum: [mock, real]
+
+  testarten:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [art, ergebnis]
+      properties:
+        art:
+          enum:
+            - unit
+            - kontrakt
+            - fachlich
+            - systemintegration
+            - performance
+            - sicherheit-statisch
+            - sicherheit-dynamisch
+            - smoke
+            - health
+        stufe:
+          enum: [unit, kontrakt, system, abnahme]
+        schnittstellen:
+          enum: [mock, real, na]
+        ergebnis:
+          enum: [bestanden, fehlgeschlagen, nicht_ausgefuehrt]
+        anzahl: {type: [integer, "null"]}
+        fehler: {type: [integer, "null"]}
+        dauer_s: {type: [number, "null"]}
+        details: {type: [string, "null"]}
+
+  triage:
+    description: "bei Fehlschlägen: Ursache trennen (Kap. 8/10)"
+    type: [array, "null"]
+    items:
+      type: object
+      additionalProperties: false
+      required: [testart, ursache]
+      properties:
+        testart: {type: string}
+        ursache: {enum: [eigenes_system, umsystem, nicht_verfuegbar]}
+        notiz: {type: [string, "null"]}
+
+  signatur:
+    description: "Signatur beim Übergang int Phase 1 → Phase 2 (Kap. 7/12); bis dahin null"
+    type: [string, "null"]

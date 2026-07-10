@@ -1,0 +1,8 @@
+# Testprotokolle sind Build-Artefakte: Jenkins archiviert sie pro Lauf
+# (archiveArtifacts). Nicht jeder lokale Lauf wird eingecheckt, um Churn zu
+# vermeiden. Der auditierbare Speicher ist das CI-Artefakt-Archiv; ein signiertes
+# Promotion-Protokoll (int Phase 1 → Phase 2) wird später bewusst versioniert.
+protocols/*.yaml
+.pytest-report.xml
+__pycache__/
+.pytest_cache/
