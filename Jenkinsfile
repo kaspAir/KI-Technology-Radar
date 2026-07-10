@@ -36,7 +36,9 @@ pipeline {
           def mapping = [dev: 'dev', test: 'test', int: 'int', main: 'prod']
           // 1. bekannter Branch gewinnt; 2. sonst Job-Override RADAR_ENV; 3. sonst dev.
           env.RADAR_ENV = mapping.get(branch, (env.RADAR_ENV ?: 'dev'))
-          echo "Branch=${branch}  ->  Umgebung=${env.RADAR_ENV}"
+          // Commit fuer die Herkunft im Testprotokoll (Container hat kein git).
+          env.RADAR_COMMIT = scmVars.GIT_COMMIT ?: ''
+          echo "Branch=${branch}  ->  Umgebung=${env.RADAR_ENV}  (Commit ${env.RADAR_COMMIT})"
         }
       }
     }
@@ -53,10 +55,17 @@ pipeline {
     // statische Sicherheit. Erzeugt das versionierte Testprotokoll.
     stage('Schnelle Suite + Protokoll') {
       steps {
+        // Kein Bind-Mount: unter Docker-outside-of-Docker zeigt -v auf den
+        // Daemon-Host, nicht in den Workspace. Protokoll per 'docker cp' holen.
         sh '''
-          docker run --rm -v "$PWD/testing/protocols:/app/testing/protocols" \
+          docker run --name radar-suite-${BUILD_NUMBER} -e RADAR_COMMIT="${RADAR_COMMIT}" \
             ki-tech-radar-test:${BUILD_NUMBER} \
             python testing/run_suite.py --env ${RADAR_ENV} --instance examples/sample-instance
+          code=$?
+          mkdir -p testing/protocols
+          docker cp radar-suite-${BUILD_NUMBER}:/app/testing/protocols/. testing/protocols/ || true
+          docker rm radar-suite-${BUILD_NUMBER} >/dev/null 2>&1 || true
+          exit $code
         '''
       }
     }

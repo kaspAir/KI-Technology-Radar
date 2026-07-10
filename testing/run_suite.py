@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import os
 import shutil
 import subprocess
 import sys
@@ -43,6 +44,11 @@ def now_iso() -> str:
 
 
 def git_commit() -> str | None:
+    # In der CI läuft die Suite im Container ohne git/.git — Commit via Env-Var
+    # (Jenkins GIT_COMMIT). Lokal aus git ableiten.
+    env_commit = os.environ.get("RADAR_COMMIT")
+    if env_commit:
+        return env_commit[:12]
     try:
         r = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
                            cwd=CORE, capture_output=True, text=True)
