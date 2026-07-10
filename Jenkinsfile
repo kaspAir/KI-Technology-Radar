@@ -16,9 +16,9 @@
 // sondern aus dem tatsächlich ausgecheckten Branch (checkout scm -> GIT_BRANCH).
 // Override möglich über ein Job-Environment RADAR_ENV (dev|test|int|prod).
 //
-// Deploy: SSH-git-pull via deploy/deploy.sh (wie die übrige Suite), scharf nur
-// bei DEPLOY_ENABLED=true. Host/Pfade/Credential kommen aus Jenkins-Env/Credentials
-// (siehe deploy/README.md) — hier ist NICHTS hartkodiert/geraten.
+// Deploy: rsync der statischen Seite über SSH via deploy/deploy.sh (SSH-basiert
+// wie die übrige Suite), scharf nur bei DEPLOY_ENABLED=true. Host/Pfade/Credential
+// kommen aus Jenkins-Env/Credentials (siehe deploy/README.md) — nichts geraten.
 
 pipeline {
   agent any
@@ -90,9 +90,9 @@ pipeline {
       }
     }
 
-    // Deploy je Umgebung per SSH-git-pull (deploy/deploy.sh). Läuft nur scharf,
-    // wenn DEPLOY_ENABLED=true gesetzt ist — sonst sauber übersprungen, Build
-    // bleibt grün. Nur der öffentliche Kern wird deployt, nie die private Instanz.
+    // Deploy je Umgebung: rsync von site/ in den Docroot (deploy/deploy.sh). Läuft
+    // nur scharf bei DEPLOY_ENABLED=true — sonst sauber übersprungen, Build bleibt
+    // grün. Nur der öffentliche Kern wird deployt, nie die private Instanz.
     stage('Deploy') {
       when { expression { env.DEPLOY_ENABLED == 'true' } }
       steps {

@@ -54,16 +54,16 @@ dev  --(dev grün + Freigabe)-->  test  --(Freigabe)-->  int  --(Freigabe)-->  m
 
 ## Deploy
 
-Per SSH-git-pull wie die übrige Suite (kein Docker auf dem Zielhost). Der
-Subdomain-Docroot jeder Umgebung zeigt auf `site/` im jeweiligen Host-Checkout;
-`deploy/deploy.sh` zieht den passenden Branch. Verdrahtet im `Jenkinsfile`, scharf
-nur bei `DEPLOY_ENABLED=true`. Einrichtung und benötigte Variablen:
+Die statische Seite `site/` wird per `rsync` über SSH in den Subdomain-Docroot
+gespiegelt (SSH-basiert wie die übrige Suite, kein Docker auf dem Zielhost, kein
+Host-Checkout nötig). Verdrahtet im `Jenkinsfile`, scharf nur bei
+`DEPLOY_ENABLED=true`. Einrichtung und benötigte Variablen:
 [deploy/README.md](../deploy/README.md).
 
 ## Offene Infrastruktur-Punkte (Betreiber)
 
-- SSH-Credential `ki-tech-radar-deploy` + `DEPLOY_HOST` / `DEPLOY_PATH_*` in Jenkins setzen,
-  Host-Checkouts je Umgebung anlegen (Docroot → `site/`), dann `DEPLOY_ENABLED=true`.
+- SSH-Credential `ki-tech-radar-deploy` anlegen; in Jenkins `DEPLOY_HOST`,
+  `DEPLOY_PATH_DEV|TEST|INT|PROD` (Docroots der Subdomains) und `DEPLOY_ENABLED=true` setzen.
 - Branch-Protection so, dass Promotion nur nach grüner Suite + Freigabe möglich ist.
 - Der Radar hat in R1 **noch keine interaktive UI** (YAML-first, keine UI vor
   stabilem Schema — E1). Deployt wird eine **statische Platzhalter-Seite**
