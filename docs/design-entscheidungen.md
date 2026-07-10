@@ -87,3 +87,39 @@ getrennt durch Konfiguration und Repo-Grenze.
 > **schon ab R1** als zwei getrennte Repositorys umgesetzt, nicht erst ab R8.
 > R8 reduziert sich damit auf Lizenz, Allowlist-Export und das Ausreifen der
 > Starter-Taxonomien.
+
+## Ausblick (vorgemerkt, noch nicht umgesetzt)
+
+Diese Punkte sind bewusst festgehalten, damit die aktuellen Entscheidungen sie
+nicht verbauen — sie sind noch nicht Teil des Schemas oder Scopes.
+
+### A1 — Länder-/Jurisdiktionsdimension (Konfiguration, nicht Schema)
+Relevanz und **rechtliche Anwendbarkeit** eines Eintrags hängen vom Land ab (die
+EU-KI-Verordnung gilt z.B. in der Schweiz nicht direkt, in EWR-Staaten wie
+Liechtenstein anders). Die Jurisdiktion soll deshalb eine **wählbare Dimension**
+werden, konsequent in der Linie von E24 („der Kunde ist Konfiguration, nicht
+Schema"):
+
+- Land/Jurisdiktion ist **Instanz-Konfiguration**, kein Eigenname im Kern.
+- Ein Eintrag kann eine **je-Land-Einschätzung** tragen (Relevanz, Handlungsdruck,
+  Anwendbarkeit) statt nur einer globalen — das Bewertungsraster wird
+  jurisdiktionsbewusst (vgl. Regel „Handlungsdruck bemisst sich an der geltenden
+  Rechtsordnung").
+- Nutzen: derselbe Kern-Radar wird länderübergreifend einsetzbar; nur die
+  Länder-Konfiguration und die Instanzdaten unterscheiden sich.
+
+### A2 — Benutzerverwaltung & Mandantenfähigkeit (Architektur-Evolution)
+Perspektivisch braucht es Zugriffsschutz (Authentifizierung/Rollen) und die
+Fähigkeit, mehrere Organisationen zu bedienen. **Das steht in Spannung zur
+v1-Scope-Bremse** („keine Mandantenfähigkeit im Code — eine Instanz pro
+Organisation, getrennt durch Repo-Grenze, nicht durch Tenant-IDs"). Der Übergang
+ist deshalb eine bewusste Architektur-*Evolution*, nicht ein Nebenschritt:
+
+- Solange Daten synthetisch sind (Entwicklung), dürfen dev/test offen sichtbar sein.
+- **Sobald echte, private Instanzdaten existieren**, braucht es davor
+  Authentifizierung — insbesondere auf öffentlich erreichbaren Umgebungen. Die
+  heutige Repo-Grenze schützt die Daten *im Speicher*, nicht *im Betrieb einer
+  offenen URL*.
+- Mandantenfähigkeit im Code (Tenant-Isolation) wäre der grössere Bruch mit v1;
+  zu entscheiden, wenn ein zweiter Mandant real wird. Bis dahin bleibt
+  „eine Instanz pro Organisation" gültig.
