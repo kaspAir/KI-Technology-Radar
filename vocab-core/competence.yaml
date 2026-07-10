@@ -1,0 +1,14 @@
+# Kompetenzen (competence) — n je Eintrag. Welche Fähigkeit wird wichtiger?
+# Diese Achse trägt den strategischen Mehrwert: aus ihr leitet sich die
+# Kompetenzempfehlung im Bericht ab (E15).
+terms:
+  - {id: competence.architektur,          taxonomy: competence, label: "Architektur",           status: active, since: 2026-07-10}
+  - {id: competence.prompt-engineering,   taxonomy: competence, label: "Prompt Engineering",     status: active, since: 2026-07-10}
+  - {id: competence.context-engineering,  taxonomy: competence, label: "Context Engineering",    status: active, since: 2026-07-10}
+  - {id: competence.evaluation,           taxonomy: competence, label: "Evaluation",             status: active, since: 2026-07-10}
+  - {id: competence.governance,           taxonomy: competence, label: "Governance",             status: active, since: 2026-07-10}
+  - {id: competence.software-testing,     taxonomy: competence, label: "Software Testing",       status: active, since: 2026-07-10}
+  - {id: competence.juristische-pruefung, taxonomy: competence, label: "Juristische Prüfung",    status: active, since: 2026-07-10}
+  - {id: competence.datenschutz,          taxonomy: competence, label: "Datenschutz",            status: active, since: 2026-07-10}
+  - {id: competence.datenmodellierung,    taxonomy: competence, label: "Datenmodellierung",      status: active, since: 2026-07-10}
+  - {id: competence.change-adoption,      taxonomy: competence, label: "Change / Adoption",      status: active, since: 2026-07-10}

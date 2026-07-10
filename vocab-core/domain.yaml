@@ -1,0 +1,19 @@
+# Domänen (domain) — n je Eintrag. Für wen relevant?
+# Organisationsspezifische Domänen (z.B. eigene Fachbereiche) gehören NICHT
+# hierher, sondern in die Instanz (/vocab), damit der Kern neutral bleibt (E23).
+terms:
+  - {id: domain.projektmanagement,             taxonomy: domain, label: "Projektmanagement",              status: active, since: 2026-07-10}
+  - {id: domain.qualitaetsmanagement,          taxonomy: domain, label: "Qualitätsmanagement",            status: active, since: 2026-07-10}
+  - {id: domain.risikomanagement,              taxonomy: domain, label: "Risikomanagement",               status: active, since: 2026-07-10}
+  - {id: domain.organisation-prozessmanagement, taxonomy: domain, label: "Organisation & Prozessmanagement", status: active, since: 2026-07-10}
+  - {id: domain.oeffentliche-verwaltung,       taxonomy: domain, label: "Öffentliche Verwaltung",         status: active, since: 2026-07-10}
+  - {id: domain.justiz,                        taxonomy: domain, label: "Justiz",                         status: active, since: 2026-07-10}
+  - {id: domain.gesundheitswesen,              taxonomy: domain, label: "Gesundheitswesen",               status: active, since: 2026-07-10}
+  - {id: domain.datenschutz,                   taxonomy: domain, label: "Datenschutz",                    status: active, since: 2026-07-10}
+  - {id: domain.compliance,                    taxonomy: domain, label: "Compliance",                     status: active, since: 2026-07-10}
+  - {id: domain.softwareentwicklung,           taxonomy: domain, label: "Softwareentwicklung",            status: active, since: 2026-07-10}
+  - {id: domain.ki-entwicklung,                taxonomy: domain, label: "KI-Entwicklung",                 status: active, since: 2026-07-10}
+  - {id: domain.wissensmanagement,             taxonomy: domain, label: "Wissensmanagement",              status: active, since: 2026-07-10}
+  - {id: domain.bildung,                       taxonomy: domain, label: "Bildung",                        status: active, since: 2026-07-10}
+  - {id: domain.hr,                            taxonomy: domain, label: "HR",                             status: active, since: 2026-07-10}
+  - {id: domain.finanzen,                      taxonomy: domain, label: "Finanzen",                       status: active, since: 2026-07-10}

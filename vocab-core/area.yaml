@@ -1,0 +1,10 @@
+# Bereiche (area) — genau einer je Eintrag. In welchem Beobachtungsfeld?
+# v1: nur oberste Ebene befüllt. Die zweite Ebene ist im Schema vorgesehen
+# (parent_id, max. 2 Ebenen), bleibt aber in v1 leer (Scope-Bremse).
+# Beispiele späterer Unterbereiche: Produkte -> Entwicklungswerkzeuge/Assistenten/Plattformen.
+terms:
+  - {id: area.forschung,          taxonomy: area, label: "Forschung",           status: active, since: 2026-07-10}
+  - {id: area.produkte,           taxonomy: area, label: "Produkte",            status: active, since: 2026-07-10}
+  - {id: area.recht-regulatorik,  taxonomy: area, label: "Recht & Regulatorik", status: active, since: 2026-07-10}
+  - {id: area.markt-praxis,       taxonomy: area, label: "Markt & Praxis",      status: active, since: 2026-07-10}
+  - {id: area.non-technical,      taxonomy: area, label: "Non-Technical",       status: active, since: 2026-07-10}

@@ -1,0 +1,48 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "radar-entry.schema.yaml"
+title: RadarEntry
+description: >-
+  Das verfolgte Ding, das sich über die Zeit bewegt (E2). Klassifikation nur in
+  kontrolliertes Vokabular (E7). current_ring ist ABGELEITET aus dem jüngsten
+  ratifizierten Assessment — validate.py prüft die Konsistenz und warnt bei
+  Abweichung (Staleness-Falle bei abgeleitet-aber-gespeichert).
+type: object
+additionalProperties: false
+required: [id, name, area, first_seen, status]
+properties:
+  id:
+    type: string
+    pattern: "^entry\\.[a-z0-9-]+$"
+  name:
+    type: string
+    minLength: 1
+  area:
+    description: "genau ein Blatt-Term der area-Taxonomie (E18)"
+    type: string
+    pattern: "^area\\.[a-z0-9-]+(\\.[a-z0-9-]+)?$"
+  tech_tags:
+    type: array
+    items: {type: string, pattern: "^tech_tag\\.[a-z0-9-]+$"}
+  domains:
+    type: array
+    items: {type: string, pattern: "^domain\\.[a-z0-9-]+(\\.[a-z0-9-]+)?$"}
+  competences:
+    type: array
+    items: {type: string, pattern: "^competence\\.[a-z0-9-]+$"}
+  methods:
+    type: array
+    items: {type: string, pattern: "^method\\.[a-z0-9-]+$"}
+  first_seen:
+    description: "wann in den Radar aufgenommen"
+    type: string
+    format: date
+  current_ring:
+    description: "abgeleitet aus jüngstem Assessment; null bis zum ersten Assessment"
+    type: [string, "null"]
+    enum: [Watch, Explore, Pilot, Adopt, Reject, null]
+  review_due:
+    description: "wann die Einschätzung erneut geprüft werden sollte (E22)"
+    type: [string, "null"]
+    format: date
+  status:
+    enum: [active, archived]

@@ -1,0 +1,44 @@
+# Muster-Bibliothek für historische Vergleiche (E13).
+# Neue Entwicklungen werden mit wiederkehrenden Mustern der Technologie-Geschichte
+# verglichen — jeweils mit Pflicht-Gegenprobe (limit) auf Ebene der Analogie.
+# Startliste, erweiterbar.
+patterns:
+  - id: pattern.hype-zyklus
+    label: "Hype-Zyklus"
+    kern: "Auslöser → Überhöhung → Ernüchterung → Produktivität"
+    fruehindikator: "Übertreibung vs. reale Reife"
+
+  - id: pattern.plattform-verschiebung
+    label: "Plattform-Verschiebung"
+    kern: "Mainframe → PC → Web → Mobile → Agenten?"
+    fruehindikator: "Wer die Plattform besitzt, gewinnt"
+
+  - id: pattern.kommoditisierung
+    label: "Kommoditisierung"
+    kern: "Teures/Spezielles wird billig/Standard"
+    fruehindikator: "Kippende Geschäftsmodelle"
+
+  - id: pattern.framework-konsolidierung
+    label: "Framework-Konsolidierung"
+    kern: "Viele Frameworks → wenige Gewinner"
+    fruehindikator: "Verfrühte Festlegung meiden"
+
+  - id: pattern.abstraktions-sprung
+    label: "Abstraktions-Sprung"
+    kern: "Assembler → Hochsprache → Framework → Sprache?"
+    fruehindikator: "Entwertete Spezialkenntnis"
+
+  - id: pattern.regulatorische-nachlaufwelle
+    label: "Regulatorische Nachlaufwelle"
+    kern: "Technik zuerst, Recht später (Internet → DSGVO, KI → AI Act)"
+    fruehindikator: "Compliance-Bedarf"
+
+  - id: pattern.open-closed-pendel
+    label: "Open-vs-Closed-Pendel"
+    kern: "Offen ↔ geschlossen im Wechsel"
+    fruehindikator: "Abhängigkeitsrisiko"
+
+  - id: pattern.erwartungs-enttaeuschung
+    label: "Erwartungs-Enttäuschung"
+    kern: 'Frühere „intelligente" Systeme enttäuschten'
+    fruehindikator: 'Warnung vor „diesmal anders"'

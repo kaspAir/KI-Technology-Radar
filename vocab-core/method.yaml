@@ -1,0 +1,14 @@
+# Methoden (method) — n je Eintrag. Was verändert sich konkret?
+# Macht sichtbar, welche etablierten Vorgehen durch eine Entwicklung berührt werden.
+# HERMES ist als öffentlicher Standard hier im Kern; ein org-spezifischer
+# EINSATZ von HERMES als Fachbereich gehört dagegen in die Instanz (/vocab).
+terms:
+  - {id: method.hermes,             taxonomy: method, label: "HERMES",                                status: active, since: 2026-07-10}
+  - {id: method.bpmn,               taxonomy: method, label: "BPMN",                                  status: active, since: 2026-07-10}
+  - {id: method.scrum,              taxonomy: method, label: "Scrum",                                 status: active, since: 2026-07-10}
+  - {id: method.safe,               taxonomy: method, label: "SAFe",                                  status: active, since: 2026-07-10}
+  - {id: method.itil,               taxonomy: method, label: "ITIL",                                  status: active, since: 2026-07-10}
+  - {id: method.iso-9001,           taxonomy: method, label: "ISO 9001",                              status: active, since: 2026-07-10}
+  - {id: method.iso-31000,          taxonomy: method, label: "ISO 31000",                             status: active, since: 2026-07-10}
+  - {id: method.dsfa,               taxonomy: method, label: "Datenschutz-Folgenabschätzung (DSFA)",  status: active, since: 2026-07-10}
+  - {id: method.legaltech-ejustice, taxonomy: method, label: "LegalTech / eJustice",                 status: active, since: 2026-07-10}

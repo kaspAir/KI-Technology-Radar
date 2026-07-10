@@ -1,0 +1,37 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "event.schema.yaml"
+title: Event
+description: >-
+  Ereignisprotokoll, append-only (E21). Jede Zeile in events.log ist ein
+  JSON-Objekt (JSON Lines) und validiert gegen dieses Schema. Der Bericht ist
+  eine Projektion über diese Events, kein gepflegtes Artefakt.
+type: object
+additionalProperties: false
+required: [id, at, actor, verb, subject_id]
+properties:
+  id:
+    type: string
+    pattern: "^evt\\.[a-z0-9-]+$"
+  at:
+    type: string
+    format: date-time
+  actor:
+    type: string
+    description: "mensch:<name> | ki:<modell>"
+    pattern: "^(ki|mensch):.+$"
+  verb:
+    enum:
+      - observation.added
+      - observation.linked
+      - entry.created
+      - assessment.drafted
+      - assessment.ratified
+      - ring.changed
+      - term.added
+      - term.deprecated
+  subject_id:
+    type: string
+    minLength: 1
+  payload:
+    description: "Diff bzw. Kurzbegründung; frei"
+    type: [object, string, "null"]

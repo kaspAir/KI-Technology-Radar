@@ -1,0 +1,23 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "source.schema.yaml"
+title: Source
+description: "Kuratierte Quelle (E6). Lebt in der Instanz — verrät, worauf die Organisation schaut."
+type: object
+additionalProperties: false
+required: [id, name, type, trust_level, cadence]
+properties:
+  id:
+    type: string
+    pattern: "^source\\.[a-z0-9-]+$"
+  name:
+    type: string
+    minLength: 1
+  type:
+    enum: [research, vendor, product, regulator, community]
+  url:
+    type: string
+    format: uri
+  trust_level:
+    enum: [high, medium, low]
+  cadence:
+    enum: [weekly, monthly]

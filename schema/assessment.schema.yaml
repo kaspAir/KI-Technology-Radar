@@ -1,0 +1,121 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "assessment.schema.yaml"
+title: Assessment
+description: >-
+  Versionierte, zeitgestempelte Bewertung (E3). Trennt KI-Entwurf (draft_*, E14)
+  von menschlicher Endfassung (E4/E9). draft_ring und ring dürfen abweichen — die
+  Differenz IST das Divergenzprotokoll. rationale und relevance_org sind privat
+  (E25) und verlassen die Instanz nie.
+type: object
+additionalProperties: false
+required:
+  [id, radar_entry_id, decided_at, valid_from, draft_by, draft_ring,
+   draft_arguments, draft_rationale, time_horizon, momentum,
+   relevance_general, relevance_org, action_pressure, ring, rationale, reviewer]
+properties:
+  id:
+    type: string
+    pattern: "^assess\\.[a-z0-9-]+$"
+  radar_entry_id:
+    type: string
+    pattern: "^entry\\.[a-z0-9-]+$"
+  decided_at:
+    type: string
+    format: date-time
+  valid_from:
+    description: "ab wann diese Fassung gilt; frühere bleiben erhalten"
+    type: string
+    format: date
+
+  # --- KI-Entwurf: Argumente, nicht nur Werte (E14) ---
+  draft_by:
+    description: "ki:<modell> ab R3; in R1/R2 mensch:<id>, weil manuell (E5)"
+    type: string
+    pattern: "^(ki|mensch):.+$"
+  draft_ring:
+    enum: [Watch, Explore, Pilot, Adopt, Reject]
+  draft_arguments:
+    type: object
+    additionalProperties: false
+    required: [opportunities, risks, affected_domains, affected_competences, affected_methods]
+    properties:
+      opportunities: {$ref: "#/$defs/argumentList"}
+      risks: {$ref: "#/$defs/argumentList"}
+      affected_domains:
+        type: array
+        items: {type: string, pattern: "^domain\\.[a-z0-9-]+(\\.[a-z0-9-]+)?$"}
+      affected_competences:
+        type: array
+        items: {type: string, pattern: "^competence\\.[a-z0-9-]+$"}
+      affected_methods:
+        type: array
+        items: {type: string, pattern: "^method\\.[a-z0-9-]+$"}
+  draft_rationale:
+    type: string
+    minLength: 1
+
+  # --- Zeit (E12) ---
+  time_horizon:
+    description: "now (0–6 Mt) | mid (6–24 Mt) | long (2–5 J)"
+    enum: [now, mid, long]
+  momentum:
+    enum: [accelerating, steady, stalling, declining]
+
+  # --- Menschliche Endfassung (E4) ---
+  relevance_general:
+    description: "1–5, unabhängig von der Organisation"
+    type: integer
+    minimum: 1
+    maximum: 5
+  relevance_org:
+    description: "1–5, für die betreibende Organisation (E24). PRIVAT (E25)."
+    type: integer
+    minimum: 1
+    maximum: 5
+  action_pressure:
+    enum: [low, medium, high]
+  ring:
+    enum: [Watch, Explore, Pilot, Adopt, Reject]
+  rationale:
+    description: "Mensch prüft die draft_arguments. PRIVAT (E25)."
+    type: string
+    minLength: 1
+  reviewer:
+    description: "mensch:<id> — pseudonyme ID, Pflicht (E27)"
+    type: string
+    pattern: "^mensch:.+$"
+
+  # --- Historischer Vergleich (E13) ---
+  historical_analogies:
+    type: array
+    items: {$ref: "#/$defs/historicalAnalogy"}
+
+$defs:
+  argumentList:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [statement, citation]
+      properties:
+        statement: {type: string, minLength: 1}
+        citation:
+          description: "Beleg — Verweis auf eine Observation oder Quelle (E8)"
+          type: string
+          minLength: 1
+  historicalAnalogy:
+    type: object
+    additionalProperties: false
+    required: [pattern, similarity, what_happened, lesson, limit]
+    properties:
+      pattern:
+        description: "Referenz auf pattern.<slug> aus /patterns oder freier Text"
+        type: string
+        minLength: 1
+      similarity: {type: string, minLength: 1}
+      what_happened: {type: string, minLength: 1}
+      lesson: {type: string, minLength: 1}
+      limit:
+        description: "WO der Vergleich nicht mehr trägt — Pflicht (E13)"
+        type: string
+        minLength: 1

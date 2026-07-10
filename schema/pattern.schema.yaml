@@ -1,0 +1,25 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "pattern.schema.yaml"
+title: Pattern
+description: >-
+  Ein wiederkehrendes Muster der Technologie-Geschichte, an dem Neues geprüft
+  wird (E13). Eine HistoricalAnalogy referenziert ein Pattern und ergänzt die
+  Pflicht-Gegenprobe (limit). Die Liste ist erweiterbar.
+type: object
+additionalProperties: false
+required: [id, label, kern, fruehindikator]
+properties:
+  id:
+    type: string
+    pattern: "^pattern\\.[a-z0-9-]+$"
+  label:
+    type: string
+    minLength: 1
+  kern:
+    description: "Der Kern des Musters in einem Satz"
+    type: string
+    minLength: 1
+  fruehindikator:
+    description: "Wofür das Muster ein Frühindikator ist"
+    type: string
+    minLength: 1

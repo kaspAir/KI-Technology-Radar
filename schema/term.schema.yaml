@@ -1,0 +1,29 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "term.schema.yaml"
+title: Term
+description: >-
+  Ein Eintrag einer Taxonomie (E18/E19). Alle fünf Achsen (area, domain,
+  competence, method, tech_tag) benutzen dieselbe Struktur. Hierarchie über
+  parent_id, max. 2 Ebenen in v1. Terme werden nie gelöscht, nur deprecated.
+type: object
+additionalProperties: false
+required: [id, taxonomy, label, status, since]
+properties:
+  id:
+    type: string
+    description: "z.B. area.produkte oder area.produkte.entwicklungswerkzeuge"
+    pattern: "^(area|domain|competence|method|tech_tag)\\.[a-z0-9-]+(\\.[a-z0-9-]+)?$"
+  taxonomy:
+    enum: [area, domain, competence, method, tech_tag]
+  label:
+    type: string
+    minLength: 1
+  parent_id:
+    description: "leer/nicht gesetzt = oberste Ebene"
+    type: [string, "null"]
+    pattern: "^(area|domain|competence|method|tech_tag)\\.[a-z0-9-]+$"
+  status:
+    enum: [active, deprecated]
+  since:
+    type: string
+    format: date

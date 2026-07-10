@@ -1,0 +1,4 @@
+# Kopiere diese Datei nach radar.config.yaml (git-ignoriert) und trage den Pfad
+# zur privaten Instanz ein. Der Kern liest sein Datenverzeichnis aus der
+# Konfiguration (E23) — die Instanz ist NIE ein Unterordner des Kerns.
+instance: ../KI-Technology-Radar-Instanz

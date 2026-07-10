@@ -1,0 +1,12 @@
+# Tech-Tags (tech_tag) — n je Eintrag. Was ist es technisch?
+terms:
+  - {id: tech_tag.llm,              taxonomy: tech_tag, label: "LLM",              status: active, since: 2026-07-10}
+  - {id: tech_tag.agent,           taxonomy: tech_tag, label: "Agent",            status: active, since: 2026-07-10}
+  - {id: tech_tag.rag,             taxonomy: tech_tag, label: "RAG",              status: active, since: 2026-07-10}
+  - {id: tech_tag.reasoning,       taxonomy: tech_tag, label: "Reasoning",        status: active, since: 2026-07-10}
+  - {id: tech_tag.vision,          taxonomy: tech_tag, label: "Vision",           status: active, since: 2026-07-10}
+  - {id: tech_tag.speech,          taxonomy: tech_tag, label: "Speech",           status: active, since: 2026-07-10}
+  - {id: tech_tag.vector-db,       taxonomy: tech_tag, label: "Vector-DB",        status: active, since: 2026-07-10}
+  - {id: tech_tag.framework,       taxonomy: tech_tag, label: "Framework",        status: active, since: 2026-07-10}
+  - {id: tech_tag.deployment-infra, taxonomy: tech_tag, label: "Deployment/Infra", status: active, since: 2026-07-10}
+  - {id: tech_tag.regulatorik,     taxonomy: tech_tag, label: "Regulatorik",      status: active, since: 2026-07-10}

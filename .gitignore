@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+
+# Lokale Konfiguration (Pfad zur privaten Instanz o. Ä.)
+radar.config.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ------------------------------------------------------------------
+# Schutz vor versehentlichem Instanz-Commit in den Kern (E23/E25).
+# Der Kern enthält NIE Organisationsdaten. Diese Muster fangen einen
+# versehentlich hierher kopierten Instanz-Ordner ab.
+# ------------------------------------------------------------------
+/entries/
+/inbox/
+/events/
+/reports/
+/sources/
+/identities/
+/agents/
+/vocab/
