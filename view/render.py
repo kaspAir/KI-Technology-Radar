@@ -125,6 +125,11 @@ def main() -> int:
                      for p in collect(CORE / "patterns", "patterns.yaml", "patterns")}
     comp_label = {t["id"]: t.get("label", t["id"])
                   for t in collect(CORE / "vocab-core", "competence.yaml", "terms")}
+    domain_label = {t["id"]: t.get("label", t["id"])
+                    for t in collect(CORE / "vocab-core", "domain.yaml", "terms")}
+
+    def dom_data(e):
+        return " ".join(d.split(".", 1)[-1] for d in (e.get("domains") or []))
 
     # Einträge + jüngstes Assessment.
     entries = collect(inst / "entries", "entry.yaml", "entries")
@@ -202,7 +207,7 @@ def main() -> int:
     # Blips — jeder verlinkt auf sein Detail-Dossier (detail-<slug>.html).
     for e, a, x, y in placed:
         slug = e["id"].split(".", 1)[-1]
-        svg.append(f'<a href="detail-{esc(slug)}.html">')
+        svg.append(f'<a class="blip" data-dom="{esc(dom_data(e))}" href="detail-{esc(slug)}.html">')
         svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="{PAPER}"/>'
                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="{GOLD}"/>')
         lx = x + 12
@@ -225,7 +230,7 @@ def main() -> int:
                       f'Handlungsdruck {esc(a.get("action_pressure"))} · {esc(a.get("momentum"))}')
         slug = e["id"].split(".", 1)[-1]
         cards.append(
-            f'<a class="cardlink" href="detail-{esc(slug)}.html">'
+            f'<a class="cardlink" data-dom="{esc(dom_data(e))}" href="detail-{esc(slug)}.html">'
             f'<div class="card"><div class="meta">{esc(area)} · '
             f'<span class="ring">{esc(ring)}</span></div>'
             f'<div class="name">{esc(e.get("name"))}</div>'
@@ -270,6 +275,20 @@ def main() -> int:
         tsel = ('<label class="jur">Zeitpunkt&nbsp;'
                 '<select onchange="if(this.value)location.href=this.value">'
                 + "".join(topts) + "</select></label>")
+    # Branche-Umschalter: filtert Blips + Karten clientseitig nach Domäne/Branche.
+    present_dom: dict[str, int] = {}
+    for e, *_ in placed:
+        for d in (e.get("domains") or []):
+            present_dom[d] = present_dom.get(d, 0) + 1
+    bran_sel = ""
+    if present_dom:
+        bopts = ['<option value="">Alle Branchen</option>']
+        for d in sorted(present_dom, key=lambda x: domain_label.get(x, x)):
+            bopts.append(f'<option value="{esc(d.split(".", 1)[-1])}">'
+                         f'{esc(domain_label.get(d, d))} ({present_dom[d]})</option>')
+        bran_sel = ('<label class="jur">Branche&nbsp;<select id="bran" onchange="branf()">'
+                    + "".join(bopts) + "</select></label>")
+
     rej = ""
     if rejected:
         names = ", ".join(
@@ -399,7 +418,7 @@ def main() -> int:
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
-{country_sel} {tsel}
+{country_sel} {tsel} {bran_sel}
 <p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}</p>
 {''.join(svg)}
 <div class="legend"><b>Ringe (innen→aussen):</b>
@@ -411,6 +430,11 @@ def main() -> int:
 {erosion}
 {muster}
 <p class="note">{mode_note}. Erzeugt aus der Instanz mit view/render.py — read-only.</p>
+<script>
+function branf(){{var v=document.getElementById('bran').value;
+document.querySelectorAll('.blip,.cardlink').forEach(function(el){{
+el.style.display=(!v||(' '+(el.getAttribute('data-dom')||'')+' ').indexOf(' '+v+' ')>=0)?'':'none';}});}}
+</script>
 </div></body></html>"""
 
     out = Path(args.out)
