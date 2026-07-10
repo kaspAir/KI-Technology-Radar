@@ -15,6 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 CORE = Path(__file__).resolve().parent.parent
 
 for _s in (sys.stdout, sys.stderr):
@@ -36,6 +38,23 @@ def event_years(inst: Path) -> list[str]:
                 except Exception:
                     pass
     return sorted(ys)
+
+
+def entry_ids(inst: Path) -> list[str]:
+    ids = []
+    base = inst / "entries"
+    if not base.exists():
+        return ids
+    for p in sorted(base.rglob("entry.yaml")):
+        try:
+            d = yaml.safe_load(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for e in (d.get("entries", []) if isinstance(d, dict) and "entries" in d
+                  else [d] if isinstance(d, dict) else d if isinstance(d, list) else []):
+            if isinstance(e, dict) and e.get("id"):
+                ids.append(e["id"])
+    return ids
 
 
 def run(script: str, *extra: str) -> None:
@@ -73,8 +92,15 @@ def main() -> int:
     # Bericht-Seite mit Zeitraum-Wähler
     run("reportsite.py", "--instance", str(inst), "--out", str(out / "bericht.html"))
 
+    # Detail-Dossier je Eintrag (detail-<slug>.html) — Ziel der Blip-/Karten-Links.
+    ids = entry_ids(inst)
+    for eid in ids:
+        slug = eid.split(".", 1)[-1]
+        run("detail.py", "--instance", str(inst), "--entry", eid,
+            "--mode", args.mode, "--out", str(out / f"detail-{slug}.html"))
+
     print(f"Site erzeugt in {out}: index.html + {len(snaps)} Jahres-Snapshots "
-          f"({', '.join(snaps) or '—'}) + bericht.html")
+          f"({', '.join(snaps) or '—'}) + bericht.html + {len(ids)} Detail-Dossiers")
     return 0
 
 

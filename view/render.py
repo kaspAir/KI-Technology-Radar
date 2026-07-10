@@ -197,14 +197,17 @@ def main() -> int:
         svg.append(f'<text x="{x:.0f}" y="{y+4:.0f}" text-anchor="{anchor}" font-size="13" '
                    f'fill="{INK}" font-weight="500" font-family="system-ui,sans-serif">'
                    f'{esc(area_label[aid])}</text>')
-    # Blips
+    # Blips — jeder verlinkt auf sein Detail-Dossier (detail-<slug>.html).
     for e, a, x, y in placed:
+        slug = e["id"].split(".", 1)[-1]
+        svg.append(f'<a href="detail-{esc(slug)}.html">')
         svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="{PAPER}"/>'
                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="{GOLD}"/>')
         lx = x + 12
         svg.append(f'<text x="{lx:.1f}" y="{y+4:.1f}" text-anchor="start" font-size="12.5" '
                    f'fill="{INK}" font-weight="500" font-family="system-ui,sans-serif">'
                    f'{esc(e.get("name"))}</text>')
+        svg.append('</a>')
     svg.append("</svg>")
 
     # --- Karten --------------------------------------------------------------
@@ -218,11 +221,13 @@ def main() -> int:
         else:
             detail = (f'Relevanz {esc(a.get("relevance_general"))}/{esc(a.get("relevance_org"))} · '
                       f'Handlungsdruck {esc(a.get("action_pressure"))} · {esc(a.get("momentum"))}')
+        slug = e["id"].split(".", 1)[-1]
         cards.append(
+            f'<a class="cardlink" href="detail-{esc(slug)}.html">'
             f'<div class="card"><div class="meta">{esc(area)} · '
             f'<span class="ring">{esc(ring)}</span></div>'
             f'<div class="name">{esc(e.get("name"))}</div>'
-            f'<div class="detail">{detail}</div></div>')
+            f'<div class="detail">{detail}</div></div></a>')
 
     stamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
     stand = f"Stand zum {asof} (historisch)" if asof else f"Stand {stamp}"
@@ -262,7 +267,9 @@ def main() -> int:
                 + "".join(topts) + "</select></label>")
     rej = ""
     if rejected:
-        names = ", ".join(esc(e.get("name")) for e in rejected)
+        names = ", ".join(
+            f'<a class="rejlink" href="detail-{esc(e["id"].split(".", 1)[-1])}.html">{esc(e.get("name"))}</a>'
+            for e in rejected)
         rej = f'<p class="rej">Reject (bewusst nicht verfolgt): {names}</p>'
 
     # Historische Muster (E13): Vergleich mit Pflicht-Gegenprobe. Analytische
@@ -351,7 +358,13 @@ def main() -> int:
   .legend{{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:#6b6862;margin:8px 0 18px}}
   .legend b{{color:{INK};font-weight:500}}
   .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}}
-  .card{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px}}
+  .cardlink{{text-decoration:none;color:inherit;display:block}}
+  .card{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px;transition:border-color .12s,box-shadow .12s}}
+  .cardlink:hover .card{{border-color:{GOLD};box-shadow:0 2px 10px rgba(192,133,31,.12)}}
+  svg a{{cursor:pointer}}
+  svg a:hover text{{fill:{GOLD}}}
+  .rejlink{{color:inherit;text-decoration:none;border-bottom:1px dotted #b3afa6}}
+  .rejlink:hover{{color:{GOLD};border-color:{GOLD}}}
   .meta{{font-size:12.5px;color:#6b6862}}
   .ring{{color:{GOLD};font-weight:600}}
   .name{{font-size:17px;font-weight:600;margin:2px 0 6px}}
