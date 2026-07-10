@@ -32,7 +32,8 @@ genau dieser Pfad ist `DEPLOY_PATH_<UMGEBUNG>`.
 
 ## Voraussetzungen auf dem Jenkins-Agent
 
-- `ssh` und `rsync` vorhanden; Zielhost per SSH erreichbar (Key im Credential).
+- `ssh` und `tar` vorhanden (kein `rsync` nötig); Zielhost per SSH erreichbar
+  (Key im Credential). Die Übertragung läuft als tar-über-ssh.
 
 > Sicherheitsnaht: Nur der **öffentliche Kern** (die Seite) wird deployt. Die
 > **private Instanz** (Organisationsdaten) wird NIE auf die Web-Hosts ausgespielt.

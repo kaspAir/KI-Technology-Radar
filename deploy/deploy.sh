@@ -40,7 +40,7 @@ if [ "$enabled" != "true" ] || [ -z "$host" ] || [ -z "$docroot" ]; then
 fi
 
 echo "Deploy ($env): site/ -> ${target}:${docroot}/"
-# Nur den Seiteninhalt spiegeln (README nicht ausliefern). Kein --delete, um bei
-# einem falsch gesetzten Docroot nichts zu löschen.
-rsync -az --exclude 'README.md' -e "ssh ${SSH_OPTS:-}" ./site/ "${target}:${docroot}/"
+# Seiteninhalt per tar-über-ssh übertragen — braucht nur ssh + tar (kein rsync
+# auf dem Agent). README wird nicht ausgeliefert. Kein Löschen bestehender Dateien.
+tar -C site --exclude='README.md' -cf - . | ssh ${SSH_OPTS:-} "$target" "mkdir -p '$docroot' && tar -C '$docroot' -xf -"
 echo "Deploy ($env) ok — ${docroot} aktualisiert."
