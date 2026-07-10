@@ -234,10 +234,11 @@ def draft_real(item, run_date, rubric, scope, model, max_tokens):
         "Bewertungsraster (für relevance_general / Einordnung):\n" + rubric + "\n\n" + scope
     )
     user = (
-        "Item (arXiv):\n"
-        f"Titel: {item['title']}\nAutoren: {', '.join(item['authors'][:6])}\n"
-        f"Datum: {item['published']}\narXiv-ID: {item['arxiv_id']}\nURL: {item['url']}\n"
-        f"Abstract: {item['summary'][:1500]}\n\n"
+        "Item:\n"
+        f"Titel: {item['title']}\n"
+        f"Datum: {item.get('published', '')}\nURL: {item['url']}\n"
+        f"Zitat: {item['cite']}\n"
+        f"Zusammenfassung/Abstract: {(item.get('summary') or '')[:1500]}\n\n"
         "Aufgabe: Gib JSON:\n"
         '{"ai_related": bool, "branchen": ["domain.<id>", …] (1-3 aus der Branchen-'
         'Liste; wenn nichts speziell passt: ["domain.querschnitt-grundlagen"]), '
