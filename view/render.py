@@ -89,6 +89,8 @@ def main() -> int:
     area_label = {t["id"]: t["label"] for t in area_terms}
     n = len(areas)
     sector_center = {aid: -90 + i * (360 / n) for i, aid in enumerate(areas)}
+    pattern_label = {p["id"]: p.get("label", p["id"])
+                     for p in collect(CORE / "patterns", "patterns.yaml", "patterns")}
 
     # Einträge + jüngstes Assessment.
     entries = collect(inst / "entries", "entry.yaml", "entries")
@@ -188,6 +190,21 @@ def main() -> int:
         names = ", ".join(esc(e.get("name")) for e in rejected)
         rej = f'<p class="rej">Reject (bewusst nicht verfolgt): {names}</p>'
 
+    # Historische Muster (E13): Vergleich mit Pflicht-Gegenprobe. Analytische
+    # Wertung -> nur in der internen Ansicht, nicht in der Allowlist-Sicht (E26).
+    muster = ""
+    if args.mode != "public":
+        rows = []
+        for e, a, *_ in sorted(placed, key=lambda t: order.get(t[0].get("current_ring"), 9)):
+            for h in (a.get("historical_analogies") or []):
+                pl = esc(pattern_label.get(h.get("pattern"), h.get("pattern")))
+                rows.append(
+                    f'<div class="mrow"><div class="mhead"><b>{esc(e.get("name"))}</b> ~ {pl}</div>'
+                    f'<div class="mlimit">Grenze: {esc(h.get("limit"))}</div></div>')
+        if rows:
+            muster = ('<h2>Historische Muster (Vergleich mit Gegenprobe)</h2>'
+                      '<div class="muster">' + "".join(rows) + "</div>")
+
     doc = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KI-Technology-Radar</title>
@@ -207,6 +224,11 @@ def main() -> int:
   .detail{{font-size:13px;color:#6b6862;line-height:1.5}}
   .note{{font-size:12px;color:#8a867e;margin:18px 0 0}}
   .rej{{font-size:13px;color:#6b6862;margin:10px 0 0}}
+  h2{{font-size:18px;font-weight:600;margin:24px 0 10px}}
+  .muster{{display:flex;flex-direction:column;gap:10px}}
+  .mrow{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:12px 16px}}
+  .mhead{{font-size:14px}}
+  .mlimit{{font-size:13px;color:#6b6862;margin-top:3px;line-height:1.5}}
 </style></head><body><div class="wrap">
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
@@ -217,6 +239,7 @@ def main() -> int:
 <span><b>Explore</b> experimentieren</span><span><b>Watch</b> beobachten</span></div>
 <div class="cards">{''.join(cards)}</div>
 {rej}
+{muster}
 <p class="note">{mode_note}. Erzeugt aus der Instanz mit view/render.py — read-only.</p>
 </div></body></html>"""
 

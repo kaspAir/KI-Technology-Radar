@@ -239,6 +239,7 @@ def main() -> int:
     # --- Assessments (Instanz) --------------------------------------------------
     assessments = yaml_docs(inst / "entries", "assessments.yaml", "assessments")
     latest_ring: dict[str, tuple[str, str]] = {}  # entry_id -> (valid_from, ring)
+    latest_assess: dict[str, dict] = {}           # entry_id -> juengstes Assessment
     for a in assessments:
         if not check(schemas["assessment"], a, f"assessment {a.get('id', '?')}", rep):
             continue
@@ -261,8 +262,9 @@ def main() -> int:
         prev = latest_ring.get(rid)
         if prev is None or a["valid_from"] > prev[0]:
             latest_ring[rid] = (a["valid_from"], a["ring"])
+            latest_assess[rid] = a
 
-    # current_ring-Konsistenz (abgeleitet-aber-gespeichert)
+    # current_ring-Konsistenz (abgeleitet-aber-gespeichert) + E13-Nudge
     for e in entries:
         if e["id"] not in entry_ids:
             continue
@@ -275,6 +277,15 @@ def main() -> int:
             rep.warn(
                 f"entry {e['id']}: current_ring={stored} weicht vom juengsten "
                 f"Assessment ({derived[1]}, valid_from {derived[0]}) ab"
+            )
+        # E13: hochrelevante Eintraege sollten an einem Muster geprueft sein
+        # (historischer Vergleich mit Pflicht-Gegenprobe).
+        la = latest_assess.get(e["id"])
+        if la and la.get("relevance_general", 0) >= 4 and not la.get("historical_analogies"):
+            rep.warn(
+                f"entry {e['id']}: hochrelevant (relevance_general "
+                f"{la['relevance_general']}), aber keine historische Analogie im "
+                f"juengsten Assessment (E13)"
             )
 
     # --- Events (Instanz, JSON Lines) -------------------------------------------
