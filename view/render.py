@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import html
+import json
 import math
 import sys
 from pathlib import Path
@@ -65,6 +66,20 @@ def collect(base: Path, glob: str, key: str) -> list[dict]:
         elif isinstance(data, list):
             items.extend(data)
     return items
+
+
+def event_years(inst: Path) -> list[str]:
+    ys = set()
+    elog = inst / "events" / "events.log"
+    if elog.exists():
+        for line in elog.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                try:
+                    ys.add(json.loads(line)["at"][:4])
+                except Exception:
+                    pass
+    return sorted(ys)
 
 
 def top_area(area_id: str) -> str:
@@ -230,6 +245,21 @@ def main() -> int:
         country_sel = ('<label class="jur">Jurisdiktion&nbsp;'
                        '<select onchange="if(this.value)location.href=this.value">'
                        + "".join(opts) + "</select></label>")
+
+    # Zeit-Umschalter: Jahres-Snapshots (Ende Jahr) + Aktuell.
+    years = event_years(inst)
+    cur_year = years[-1] if years else None
+    snap_years = [y for y in reversed(years) if y != cur_year]
+    tsel = ""
+    if snap_years:
+        sel_year = (asof or "")[:4]
+        topts = [f'<option value="index.html"{"" if asof else " selected"}>Aktuell</option>']
+        for y in snap_years:
+            topts.append(f'<option value="radar-{y}.html"'
+                         f'{" selected" if sel_year == y else ""}>Ende {y}</option>')
+        tsel = ('<label class="jur">Zeitpunkt&nbsp;'
+                '<select onchange="if(this.value)location.href=this.value">'
+                + "".join(topts) + "</select></label>")
     rej = ""
     if rejected:
         names = ", ".join(esc(e.get("name")) for e in rejected)
@@ -343,7 +373,7 @@ def main() -> int:
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
-{country_sel}
+{country_sel} {tsel}
 <p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a></p>
 {''.join(svg)}
 <div class="legend"><b>Ringe (innen→aussen):</b>

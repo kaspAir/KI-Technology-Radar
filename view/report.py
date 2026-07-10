@@ -196,12 +196,12 @@ def main() -> int:
 
     # Chancen / Risiken aus den im Zeitraum gültigen Assessments
     def args_in_period(kind):
+        # Nur Einträge, die es zum Stichtag gab, mit ihrem Stand as-of `to`
+        # (latest = asof(to)) — kein Rückgriff auf zukünftige Assessments.
         res = []
-        for rid, lst in by_entry.items():
-            period_as = [a for a in lst if frm <= a.get("valid_from", "") <= to] or ([lst[-1]] if lst else [])
-            for a in period_as:
-                for item in a.get("draft_arguments", {}).get(kind, []):
-                    res.append((entries.get(rid, {}).get("name", rid), item.get("statement")))
+        for rid, a in latest.items():
+            for item in a.get("draft_arguments", {}).get(kind, []):
+                res.append((entries.get(rid, {}).get("name", rid), item.get("statement")))
         return res
 
     w("## 3. Chancen")
