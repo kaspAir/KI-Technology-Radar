@@ -230,29 +230,41 @@ def main() -> int:
         w(f"- **{comp_label.get(cid, cid)}** ({score}) — {', '.join(sorted(names))}")
     w("")
 
-    # Erosionsrisiko: hohe Kritikalität × geringe/keine Nachfrage (Frühwarnung).
+    # Kompetenz-Risiken: Kritikalität × Nachfrage-VERLAUF (Anfang→Ende Zeitraum).
+    # Trennt Erosion (fallende Nachfrage) von Blindspot/aufkommend (nie Nachfrage).
+    def demand_at(dt: str) -> dict[str, int]:
+        d: dict[str, int] = {}
+        for rid, lst in by_entry.items():
+            cand = [a for a in lst if a.get("valid_from", "") <= dt]
+            if not cand or (cand[-1].get("relevance_general") or 0) < 4:
+                continue
+            wgt = cand[-1].get("relevance_org") or cand[-1].get("relevance_general") or 0
+            for c in (entries.get(rid, {}).get("competences") or []):
+                d[c] = d.get(c, 0) + wgt
+        return d
+
     crit_of: dict[str, tuple] = {}
     for ca in collect(inst / "competences", "*.yaml", "competence_assessments"):
         cid = ca.get("competence_id")
         if cid and (cid not in crit_of or ca.get("valid_from", "") >= crit_of[cid][1]):
             crit_of[cid] = (ca.get("criticality", 0), ca.get("valid_from", ""))
-    demand_of = {cid: v[0] for cid, v in tally.items()}
-    maxd = max(demand_of.values(), default=0)
-    risks = []
+    dnow, dref = demand_at(to), demand_at(frm)
+    flags = []
     for cid, (crit, _) in crit_of.items():
-        d = demand_of.get(cid, 0)
-        if crit >= 4 and d == 0:
-            risks.append((cid, crit, d, "hoch"))
-        elif crit >= 4 and d < 0.4 * maxd:
-            risks.append((cid, crit, d, "mittel"))
-    w("## 5a. Kompetenz-Erosionsrisiko (Kritikalität × Nachfrage)")
-    if risks:
-        for cid, crit, d, lvl in sorted(risks, key=lambda r: (-r[1], r[2])):
-            w(f"- ⚠️ **{comp_label.get(cid, cid)}** — Kritikalität {crit}, aktuelle "
-              f"Nachfrage {d} → Erosionsrisiko **{lvl}**: kritisches Fundament ohne "
-              f"aktuellen Zug — bewusst Nachwuchs/Wissen erhalten.")
+        if crit < 4:
+            continue
+        now, ref = dnow.get(cid, 0), dref.get(cid, 0)
+        if now < ref:
+            flags.append((cid, crit, ref, now, "Erosion", "⚠️", "fallende Nachfrage bei hoher Kritikalität — Nachwuchs/Wissen bewusst erhalten"))
+        elif now == 0:
+            flags.append((cid, crit, ref, now, "Blindspot/aufkommend", "👁️", "kritisch, aber (noch) keine Nachfrage im Radar"))
+    w("## 5a. Kompetenz-Risiken (Kritikalität × Nachfrage-Verlauf)")
+    if flags:
+        for cid, crit, ref, now, kind, icon, note in sorted(flags, key=lambda r: (r[4] != "Erosion", -r[1])):
+            w(f"- {icon} **{comp_label.get(cid, cid)}** [{kind}] — Kritikalität {crit}, "
+              f"Nachfrage {ref}→{now}: {note}.")
     else:
-        w("Keine akuten Erosionsrisiken (kein kritisches Fundament ohne Nachfrage).")
+        w("Keine kritischen Kompetenzen ausser Nachfrage.")
     w("")
 
     # 6. Historische Einordnung

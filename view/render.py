@@ -322,17 +322,15 @@ def main() -> int:
         erows = []
         for cid, (crit, _) in crit_of.items():
             d = dmap.get(cid, 0)
-            lvl = ("hoch" if (crit >= 4 and d == 0)
-                   else ("mittel" if (crit >= 4 and d < 0.4 * maxd) else None))
-            if not lvl:
+            if not (crit >= 4 and (d == 0 or d < 0.4 * maxd)):
                 continue
             erows.append(
-                f'<div class="krow"><div><span class="kname">⚠️ {esc(comp_label.get(cid, cid))}</span> '
+                f'<div class="krow"><div><span class="kname">👁️ {esc(comp_label.get(cid, cid))}</span> '
                 f'<span class="kdrv">Kritikalität {crit} · Nachfrage {d}</span></div>'
-                f'<span class="kscore">{lvl}</span></div>')
+                f'<span class="kscore">im Blick</span></div>')
         if erows:
-            erosion = ('<h2>Kompetenz-Erosionsrisiko '
-                       '<span class="ksub">hohe Kritikalität × geringe Nachfrage</span></h2>'
+            erosion = ('<h2>Kritische Kompetenzen im Blick '
+                       '<span class="ksub">hohe Kritikalität × wenig Nachfrage — Erosion/Lücke: siehe Bericht</span></h2>'
                        '<div class="komp">' + "".join(erows) + "</div>")
 
     doc = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">

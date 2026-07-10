@@ -13,3 +13,7 @@ terms:
   - {id: competence.datenmodellierung,    taxonomy: competence, label: "Datenmodellierung",      status: active, since: 2026-07-10}
   - {id: competence.change-adoption,      taxonomy: competence, label: "Change / Adoption",      status: active, since: 2026-07-10}
   - {id: competence.programmierung,       taxonomy: competence, label: "Programmierung (Software-Grundlagen)", status: active, since: 2026-07-10}
+  - {id: competence.ki-training,          taxonomy: competence, label: "KI-Training & Fine-Tuning",          status: active, since: 2026-07-12}
+  - {id: competence.datenkuratierung,     taxonomy: competence, label: "Datenkuratierung & Datenqualität",  status: active, since: 2026-07-12}
+  - {id: competence.ki-sicherheit,        taxonomy: competence, label: "KI-Sicherheit (Safety/Security)",    status: active, since: 2026-07-12}
+  - {id: competence.ki-aufsicht,          taxonomy: competence, label: "KI-Aufsicht & Kuratierung (Human Oversight)", status: active, since: 2026-07-12}
