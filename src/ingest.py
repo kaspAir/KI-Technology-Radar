@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -94,37 +95,53 @@ def _strip_html(s: str) -> str:
     return " ".join(re.sub(r"<[^>]+>", " ", s or "").split())
 
 
+def _arxiv_item(e, src):
+    aid = re.sub(r"v\d+$", "", (e.findtext(f"{ATOM}id") or "").strip().rsplit("/", 1)[-1])
+    authors = [a.findtext(f"{ATOM}name") or "" for a in e.findall(f"{ATOM}author")]
+    first = authors[0].split()[-1] if authors and authors[0].split() else "o.A."
+    etal = " et al." if len(authors) > 1 else ""
+    title = " ".join((e.findtext(f"{ATOM}title") or "").split())
+    pub = (e.findtext(f"{ATOM}published") or "")[:10]
+    return {
+        "source_id": src["id"], "title": title,
+        "summary": " ".join((e.findtext(f"{ATOM}summary") or "").split()),
+        "url": f"https://arxiv.org/abs/{aid}" if aid else "",
+        "published": pub, "slug": slugify(aid),
+        "cite": f'{first}{etal}, „{title}", {pub[:4]}, arXiv:{aid}.',
+    }
+
+
 def fetch_arxiv(src, query, since, max_items, source_xml=None):
-    """arXiv-API (submittedDate desc), client-seitig auf published >= since gefiltert."""
-    if source_xml:
-        raw = Path(source_xml).read_text(encoding="utf-8")
-    else:
-        params = urllib.parse.urlencode({
-            "search_query": query, "sortBy": "submittedDate",
-            "sortOrder": "descending", "start": 0, "max_results": max(max_items * 3, 20),
-        })
-        with urllib.request.urlopen(f"{ARXIV_API}?{params}", timeout=30) as r:
-            raw = r.read().decode("utf-8")
-    root = ET.fromstring(raw)
-    items = []
-    for e in root.findall(f"{ATOM}entry"):
-        pub = (e.findtext(f"{ATOM}published") or "")[:10]
-        if since and pub and pub < since:
-            continue
-        aid = re.sub(r"v\d+$", "", (e.findtext(f"{ATOM}id") or "").strip().rsplit("/", 1)[-1])
-        authors = [a.findtext(f"{ATOM}name") or "" for a in e.findall(f"{ATOM}author")]
-        first = authors[0].split()[-1] if authors and authors[0].split() else "o.A."
-        etal = " et al." if len(authors) > 1 else ""
-        title = " ".join((e.findtext(f"{ATOM}title") or "").split())
-        items.append({
-            "source_id": src["id"], "title": title,
-            "summary": " ".join((e.findtext(f"{ATOM}summary") or "").split()),
-            "url": f"https://arxiv.org/abs/{aid}" if aid else "",
-            "published": pub, "slug": slugify(aid),
-            "cite": f'{first}{etal}, „{title}", {pub[:4]}, arXiv:{aid}.',
-        })
-        if len(items) >= max_items:
+    """arXiv-API (submittedDate desc) MIT Paginierung: blättert in Seiten zurück bis
+    max_items erreicht sind ODER die Treffer älter als `since` werden → echte
+    historische Tiefe (z.B. ein ganzes Jahr), begrenzt durch max_items."""
+    items, start, PAGE = [], 0, 100
+    while len(items) < max_items:
+        if source_xml:
+            raw = Path(source_xml).read_text(encoding="utf-8")
+        else:
+            params = urllib.parse.urlencode({
+                "search_query": query, "sortBy": "submittedDate",
+                "sortOrder": "descending", "start": start, "max_results": PAGE,
+            })
+            with urllib.request.urlopen(f"{ARXIV_API}?{params}", timeout=30) as r:
+                raw = r.read().decode("utf-8")
+        entries = ET.fromstring(raw).findall(f"{ATOM}entry")
+        if not entries:
             break
+        stop = False
+        for e in entries:
+            pub = (e.findtext(f"{ATOM}published") or "")[:10]
+            if since and pub and pub < since:          # desc sortiert → ab hier nur älteres
+                stop = True
+                break
+            items.append(_arxiv_item(e, src))
+            if len(items) >= max_items:
+                break
+        if source_xml or stop or len(entries) < PAGE:
+            break
+        start += PAGE
+        time.sleep(3)                                   # arXiv-Etikette: ~1 Request/3s
     return items
 
 
