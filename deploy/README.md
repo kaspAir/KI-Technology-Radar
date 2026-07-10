@@ -4,27 +4,31 @@
 Subdomain-Docroot der jeweiligen Umgebung. SSH-basiert wie die übrige Suite,
 kein Docker auf dem Zielhost, **kein** Host-seitiger git-Checkout nötig.
 
-## Jenkins-Konfiguration (das genügt)
+## Jenkins-Konfiguration (Global-Env)
 
-1. **SSH-Credential** `ki-tech-radar-deploy` (SSH Username with private key) anlegen.
-2. **Global-Env** (Manage Jenkins → System → Global properties, oder je Job):
-   - `DEPLOY_ENABLED = true`
-   - `DEPLOY_HOST = <host>`   *(Infomaniak-SSH-Host)*
-   - `DEPLOY_USER = <user>`   *(optional, sonst aus Credential/ssh-config)*
-   - `DEPLOY_PATH_DEV`, `DEPLOY_PATH_TEST`, `DEPLOY_PATH_INT`, `DEPLOY_PATH_PROD`
-     = der **Docroot** der jeweiligen Subdomain (z.B. der Ordner, in dem die
-     Infomaniak-Standardseite liegt).
-3. Der Deploy-Stage im `Jenkinsfile` läuft nur, wenn `DEPLOY_ENABLED=true`. Bis
-   dahin wird er sauber übersprungen — der Build bleibt grün.
+Setze in Manage Jenkins → System → Global properties → Environment variables:
 
-## Docroot herausfinden
+- `DEPLOY_HOST = <user@host>`   *(SSH-Ziel; darf `user@host` enthalten)*
+- `DEPLOY_CREDENTIAL = <id>`   *(ID des SSH-Credentials; ein bestehendes darf
+  wiederverwendet werden. Ohne Angabe: `ki-tech-radar-deploy`.)*
+- `DEPLOY_PATH_DEV`, `DEPLOY_PATH_TEST`, `DEPLOY_PATH_INT`, `DEPLOY_PATH_PROD`
+  = der **Docroot** der jeweiligen Subdomain.
+- `DEPLOY_ENABLED = true`   *(erst setzen, wenn die Pfade stehen)*
 
-Im Infomaniak-Manager zeigt jede Subdomain auf ein Verzeichnis. Genau dieser Pfad
-ist `DEPLOY_PATH_<UMGEBUNG>`. Die aktuell sichtbare „in Bearbeitung"-Seite liegt
-dort — unser `index.html` landet daneben.
+Der Deploy-Stage läuft nur bei `DEPLOY_ENABLED=true`; bis dahin übersprungen →
+Build bleibt grün.
 
-> Hinweis: Liegt dort eine Standard-`index.php`, kann sie Vorrang vor unserer
-> `index.html` haben. Dann die Standarddatei einmalig entfernen/umbenennen.
+## Docroots ermitteln (falls unbekannt)
+
+Setze zuerst nur `DEPLOY_HOST` (+ `DEPLOY_CREDENTIAL`) und baue einmal. Die Stage
+**„Deploy-Ziel ermitteln"** verbindet sich dann rein lesend und listet die
+Subdomain-Verzeichnisse im Build-Log — daraus ergeben sich die `DEPLOY_PATH_*`.
+
+Alternativ im Infomaniak-Manager: jede Subdomain zeigt auf ein Zielverzeichnis;
+genau dieser Pfad ist `DEPLOY_PATH_<UMGEBUNG>`.
+
+> Hinweis: Liegt im Docroot eine Standard-`index.php`, kann sie Vorrang vor
+> unserer `index.html` haben. Dann die Standarddatei einmalig entfernen/umbenennen.
 
 ## Voraussetzungen auf dem Jenkins-Agent
 

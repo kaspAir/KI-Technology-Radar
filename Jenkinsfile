@@ -90,18 +90,29 @@ pipeline {
       }
     }
 
+    // Einmalige Hilfe bei der Einrichtung: solange der Deploy nicht scharf ist,
+    // aber DEPLOY_HOST gesetzt wurde, die Subdomain-Docroots am Host auflisten
+    // (rein lesend). Sobald DEPLOY_ENABLED=true, wird diese Stage übersprungen.
+    stage('Deploy-Ziel ermitteln') {
+      when { expression { env.DEPLOY_ENABLED != 'true' && env.DEPLOY_HOST } }
+      steps {
+        sshagent(credentials: [env.DEPLOY_CREDENTIAL ?: 'ki-tech-radar-deploy']) {
+          sh '''
+            ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST" 'echo "HOME=$HOME"; echo "=== ~/sites ==="; ls -1 ~/sites 2>/dev/null; echo "=== Kandidaten (ki-tech-radar) ==="; find ~ -maxdepth 4 -iname "*ki-tech-radar*" 2>/dev/null'
+          '''
+        }
+      }
+    }
+
     // Deploy je Umgebung: rsync von site/ in den Docroot (deploy/deploy.sh). Läuft
     // nur scharf bei DEPLOY_ENABLED=true — sonst sauber übersprungen, Build bleibt
     // grün. Nur der öffentliche Kern wird deployt, nie die private Instanz.
     stage('Deploy') {
       when { expression { env.DEPLOY_ENABLED == 'true' } }
       steps {
-        withCredentials([sshUserPrivateKey(
-            credentialsId: 'ki-tech-radar-deploy',
-            keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+        sshagent(credentials: [env.DEPLOY_CREDENTIAL ?: 'ki-tech-radar-deploy']) {
           sh '''
-            export SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=accept-new"
-            export DEPLOY_USER="${DEPLOY_USER:-$SSH_USER}"
+            export SSH_OPTS="-o StrictHostKeyChecking=no"
             bash deploy/deploy.sh
           '''
         }
