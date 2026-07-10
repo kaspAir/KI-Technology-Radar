@@ -8,8 +8,8 @@
 // Branch  ->  Umgebung  ->  URL
 //   dev   ->    dev      ->  https://dev.ki-tech-radar.ch
 //   test  ->    test     ->  http://test.ki-tech-radar.ch
-//   int   ->    int      ->  (URL noch offen)
-//   main  ->    prod     ->  (URL noch offen)
+//   int   ->    int      ->  https://int.ki-tech-radar.ch
+//   main  ->    prod     ->  https://ki-tech-radar.ch
 //
 // TODO (Infrastruktur, vom Betreiber zu ergänzen): Deploy-Mechanismus und
 // Zielhosts. Hier NICHT geraten — die Deploy-Schritte sind Platzhalter mit
@@ -82,8 +82,8 @@ pipeline {
           def targets = [
             dev : 'https://dev.ki-tech-radar.ch',
             test: 'http://test.ki-tech-radar.ch',
-            int : '(URL noch offen)',
-            prod: '(URL noch offen)',
+            int : 'https://int.ki-tech-radar.ch',
+            prod: 'https://ki-tech-radar.ch',
           ]
           echo "Deploy nach ${RADAR_ENV}: ${targets[RADAR_ENV]}"
           // TODO Betreiber: hier den tatsächlichen Deploy einhängen (z.B. SSH-git-pull

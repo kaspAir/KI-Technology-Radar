@@ -9,8 +9,8 @@ einer streng sequenziellen Promotion mit Freigabe-Toren.
 |--------|----------|--------------------|-----|
 | `dev`  | dev  | nur Entwickler, klein, Schnittstellen gemockt | https://dev.ki-tech-radar.ch |
 | `test` | test | internes exploratives Testen (BKI AG), gemockt | http://test.ki-tech-radar.ch |
-| `int`  | int  | Produktions-Spiegel, echte Schnittstellen; Kunde testet & nimmt ab | *(URL noch offen)* |
-| `main` | prod | Produktivbetrieb; nur Smoke/Health | *(URL noch offen)* |
+| `int`  | int  | Produktions-Spiegel, echte Schnittstellen; Kunde testet & nimmt ab | https://int.ki-tech-radar.ch |
+| `main` | prod | Produktivbetrieb; nur Smoke/Health | https://ki-tech-radar.ch |
 
 ## Promotion — sequenziell, mit Freigabe (nie eine Stufe überspringen)
 
@@ -43,12 +43,19 @@ dev  --(dev grün + Freigabe)-->  test  --(Freigabe)-->  int  --(Freigabe)-->  m
 | Abnahme | – | – | Kunde | – |
 | Smoke / Health | – | – | ✓ | ✓ |
 
+## Jenkins-Pipelines
+
+| Branch | Umgebung | Jenkins-Job |
+|--------|----------|-------------|
+| `dev`  | dev  | 3.1 KI-Radar dev |
+| `test` | test | 3.2 KI-Radar Test |
+| `int`  | int  | 3.3 KI-Radar Int |
+| `main` | prod | 3.4 KI-Radar Prod |
+
 ## Offene Infrastruktur-Punkte (Betreiber)
 
-- URLs für **int** und **prod** festlegen.
 - **Deploy-Mechanismus** je Umgebung (Jenkins-Credential `ki-tech-radar-deploy`).
-- Jenkins **Multibranch-Pipeline** auf die vier Branches; Branch-Protection so,
-  dass Promotion nur nach grüner Suite + Freigabe möglich ist.
+- Branch-Protection so, dass Promotion nur nach grüner Suite + Freigabe möglich ist.
 - Der Radar hat in R1 **noch keinen laufenden Dienst** (YAML-first, keine UI vor
   stabilem Schema — E1). Bis dahin ist „Deploy" primär: validierte Daten +
   Testprotokoll bereitstellen; eine ausspielbare Ansicht kommt in einem späteren
