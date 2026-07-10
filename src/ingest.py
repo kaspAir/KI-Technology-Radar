@@ -206,8 +206,10 @@ def call_anthropic(model: str, system: str, user: str, max_tokens: int) -> tuple
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("ANTHROPIC_API_KEY nicht gesetzt (für den echten Lauf nötig).")
+    # System-Prompt (Raster+Scope) ist über alle Items IDENTISCH → cachen (0.1x, schneller).
     body = json.dumps({
-        "model": model, "max_tokens": max_tokens, "system": system,
+        "model": model, "max_tokens": max_tokens,
+        "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         "messages": [{"role": "user", "content": user}],
     }).encode("utf-8")
     req = urllib.request.Request(ANTHROPIC_URL, data=body, headers={
@@ -383,7 +385,11 @@ def main() -> int:
 
     cands, report_rows = [], []
     tok_in = tok_out = 0
-    for it in items:
+    for i, it in enumerate(items, 1):
+        if not args.dry_run and (i == 1 or i % 10 == 0):
+            print(f"  … {i}/{len(items)} · {len(cands)} Kandidaten · {tok_out} out-Tok"
+                  + (f" · ~${running_cost():.3f}" if (args.price_in or args.price_out) else ""),
+                  flush=True)
         if not args.dry_run and tok_out >= args.max_output_tokens:
             report_rows.append(("—", it["title"][:60], "GESTOPPT (Token-Deckel)"))
             break
