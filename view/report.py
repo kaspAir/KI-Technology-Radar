@@ -230,6 +230,31 @@ def main() -> int:
         w(f"- **{comp_label.get(cid, cid)}** ({score}) — {', '.join(sorted(names))}")
     w("")
 
+    # Erosionsrisiko: hohe Kritikalität × geringe/keine Nachfrage (Frühwarnung).
+    crit_of: dict[str, tuple] = {}
+    for ca in collect(inst / "competences", "*.yaml", "competence_assessments"):
+        cid = ca.get("competence_id")
+        if cid and (cid not in crit_of or ca.get("valid_from", "") >= crit_of[cid][1]):
+            crit_of[cid] = (ca.get("criticality", 0), ca.get("valid_from", ""))
+    demand_of = {cid: v[0] for cid, v in tally.items()}
+    maxd = max(demand_of.values(), default=0)
+    risks = []
+    for cid, (crit, _) in crit_of.items():
+        d = demand_of.get(cid, 0)
+        if crit >= 4 and d == 0:
+            risks.append((cid, crit, d, "hoch"))
+        elif crit >= 4 and d < 0.4 * maxd:
+            risks.append((cid, crit, d, "mittel"))
+    w("## 5a. Kompetenz-Erosionsrisiko (Kritikalität × Nachfrage)")
+    if risks:
+        for cid, crit, d, lvl in sorted(risks, key=lambda r: (-r[1], r[2])):
+            w(f"- ⚠️ **{comp_label.get(cid, cid)}** — Kritikalität {crit}, aktuelle "
+              f"Nachfrage {d} → Erosionsrisiko **{lvl}**: kritisches Fundament ohne "
+              f"aktuellen Zug — bewusst Nachwuchs/Wissen erhalten.")
+    else:
+        w("Keine akuten Erosionsrisiken (kein kritisches Fundament ohne Nachfrage).")
+    w("")
+
     # 6. Historische Einordnung
     w("## 6. Historische Einordnung")
     for rid, a in latest.items():

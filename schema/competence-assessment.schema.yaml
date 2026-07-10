@@ -1,0 +1,41 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "competence-assessment.schema.yaml"
+title: CompetenceAssessment
+description: >-
+  Organisations-Einschätzung der KRITIKALITÄT einer Kompetenz (Erosions-Modell).
+  Kritikalität = wie fundamental die Kompetenz für Verständnis, Prüfbarkeit und
+  Autonomie ist — UNABHÄNGIG von der aktuellen Nachfrage. Die Nachfrage wird aus
+  den Einträgen aggregiert (E15); die Kritikalität wird hier kuratiert. Zusammen:
+  hohe Kritikalität × geringe/fallende Nachfrage = Erosionsrisiko.
+  KI entwirft, Mensch ratifiziert (E4/E9). Privat (E25).
+type: object
+additionalProperties: false
+required: [competence_id, decided_at, valid_from, draft_by, draft_criticality, criticality, rationale, reviewer]
+properties:
+  competence_id:
+    type: string
+    pattern: "^competence\\.[a-z0-9-]+$"
+  decided_at: {type: string, format: date-time}
+  valid_from: {type: string, format: date}
+  draft_by:
+    description: "ki:<modell> (Entwurf) oder mensch:<id>"
+    type: string
+    pattern: "^(ki|mensch):.+$"
+  draft_criticality:
+    description: "KI-Vorschlag der Kritikalität (1–5)"
+    type: integer
+    minimum: 1
+    maximum: 5
+  draft_rationale:
+    type: [string, "null"]
+  criticality:
+    description: "1 = leicht delegierbar/ersetzbar … 5 = unverzichtbares Fundament"
+    type: integer
+    minimum: 1
+    maximum: 5
+  rationale:
+    type: string
+    minLength: 1
+  reviewer:
+    type: string
+    pattern: "^mensch:.+$"

@@ -279,6 +279,32 @@ def main() -> int:
                     '<span class="ksub">nächste 6 Monate · aus den Daten abgeleitet (E15)</span></h2>'
                     '<div class="komp">' + "".join(krows) + "</div>")
 
+    # Erosionsrisiko-Panel (hohe Kritikalität × geringe Nachfrage) — nur internal.
+    erosion = ""
+    if args.mode != "public":
+        crit_of: dict[str, tuple] = {}
+        for ca in collect(inst / "competences", "*.yaml", "competence_assessments"):
+            cid = ca.get("competence_id")
+            if cid and (cid not in crit_of or ca.get("valid_from", "") >= crit_of[cid][1]):
+                crit_of[cid] = (ca.get("criticality", 0), ca.get("valid_from", ""))
+        dmap = {cid: v[0] for cid, v in tally.items()}
+        maxd = max(dmap.values(), default=0)
+        erows = []
+        for cid, (crit, _) in crit_of.items():
+            d = dmap.get(cid, 0)
+            lvl = ("hoch" if (crit >= 4 and d == 0)
+                   else ("mittel" if (crit >= 4 and d < 0.4 * maxd) else None))
+            if not lvl:
+                continue
+            erows.append(
+                f'<div class="krow"><div><span class="kname">⚠️ {esc(comp_label.get(cid, cid))}</span> '
+                f'<span class="kdrv">Kritikalität {crit} · Nachfrage {d}</span></div>'
+                f'<span class="kscore">{lvl}</span></div>')
+        if erows:
+            erosion = ('<h2>Kompetenz-Erosionsrisiko '
+                       '<span class="ksub">hohe Kritikalität × geringe Nachfrage</span></h2>'
+                       '<div class="komp">' + "".join(erows) + "</div>")
+
     doc = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KI-Technology-Radar</title>
@@ -326,6 +352,7 @@ def main() -> int:
 <div class="cards">{''.join(cards)}</div>
 {rej}
 {komp}
+{erosion}
 {muster}
 <p class="note">{mode_note}. Erzeugt aus der Instanz mit view/render.py — read-only.</p>
 </div></body></html>"""

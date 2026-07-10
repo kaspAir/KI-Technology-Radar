@@ -12,3 +12,4 @@ terms:
   - {id: competence.datenschutz,          taxonomy: competence, label: "Datenschutz",            status: active, since: 2026-07-10}
   - {id: competence.datenmodellierung,    taxonomy: competence, label: "Datenmodellierung",      status: active, since: 2026-07-10}
   - {id: competence.change-adoption,      taxonomy: competence, label: "Change / Adoption",      status: active, since: 2026-07-10}
+  - {id: competence.programmierung,       taxonomy: competence, label: "Programmierung (Software-Grundlagen)", status: active, since: 2026-07-10}

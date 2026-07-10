@@ -155,7 +155,8 @@ def main() -> int:
 
     schemas = {
         n: load_schema(n)
-        for n in ("term", "source", "observation", "radar-entry", "assessment", "event", "pattern", "country")
+        for n in ("term", "source", "observation", "radar-entry", "assessment", "event",
+                  "pattern", "country", "competence-assessment")
     }
 
     # --- Vokabular: Kern + Instanz zusammenfuehren ------------------------------
@@ -204,6 +205,11 @@ def main() -> int:
         rep.warn("Keine country.yaml — Jurisdiktion unbestimmt (A1)")
     for c in yaml_docs(inst, "countries.yaml", "countries"):
         check(schemas["country"], c, f"country {c.get('code', '?')}", rep)
+
+    # --- Kompetenz-Kritikalität (Erosions-Modell) ---
+    for ca in yaml_docs(inst / "competences", "*.yaml", "competence_assessments"):
+        if check(schemas["competence-assessment"], ca, f"crit {ca.get('competence_id', '?')}", rep):
+            valid_ref(ca["competence_id"], "competence", "competence-assessment.competence_id")
 
     # --- Sources (Instanz) ------------------------------------------------------
     sources = yaml_docs(inst / "sources", "*.yaml", "sources")
