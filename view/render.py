@@ -91,6 +91,8 @@ def main() -> int:
     sector_center = {aid: -90 + i * (360 / n) for i, aid in enumerate(areas)}
     pattern_label = {p["id"]: p.get("label", p["id"])
                      for p in collect(CORE / "patterns", "patterns.yaml", "patterns")}
+    comp_label = {t["id"]: t.get("label", t["id"])
+                  for t in collect(CORE / "vocab-core", "competence.yaml", "terms")}
 
     # Einträge + jüngstes Assessment.
     entries = collect(inst / "entries", "entry.yaml", "entries")
@@ -205,6 +207,35 @@ def main() -> int:
             muster = ('<h2>Historische Muster (Vergleich mit Gegenprobe)</h2>'
                       '<div class="muster">' + "".join(rows) + "</div>")
 
+    # R6: Kompetenzempfehlung aus den Daten ableiten (E15) — aggregiert über die
+    # Kompetenz-Verknüpfungen der hochrelevanten Einträge, gewichtet mit der
+    # Organisations-Relevanz. Strategische, private Sicht -> nicht public (E25/E26).
+    komp = ""
+    reco = []
+    if args.mode != "public":
+        tally: dict[str, list] = {}
+        for e, a, *_ in placed:
+            if (a.get("relevance_general") or 0) < 4:      # nur hochrelevante Einträge
+                continue
+            weight = a.get("relevance_org") or a.get("relevance_general") or 0
+            for c in (e.get("competences") or []):
+                t = tally.setdefault(c, [0, set()])
+                t[0] += weight
+                t[1].add(e.get("name"))
+        ranked = sorted(tally.items(), key=lambda kv: (-kv[1][0], comp_label.get(kv[0], kv[0])))
+        krows = []
+        for cid, (score, names) in ranked[:6]:
+            label = comp_label.get(cid, cid)
+            reco.append(label)
+            krows.append(
+                f'<div class="krow"><div><span class="kname">{esc(label)}</span> '
+                f'<span class="kdrv">{esc(", ".join(sorted(names)))}</span></div>'
+                f'<span class="kscore">{score}</span></div>')
+        if krows:
+            komp = ('<h2>Empfohlene Kompetenzentwicklung '
+                    '<span class="ksub">nächste 6 Monate · aus den Daten abgeleitet (E15)</span></h2>'
+                    '<div class="komp">' + "".join(krows) + "</div>")
+
     doc = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KI-Technology-Radar</title>
@@ -229,6 +260,12 @@ def main() -> int:
   .mrow{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:12px 16px}}
   .mhead{{font-size:14px}}
   .mlimit{{font-size:13px;color:#6b6862;margin-top:3px;line-height:1.5}}
+  .ksub{{font-size:13px;font-weight:400;color:#8a867e}}
+  .komp{{display:flex;flex-direction:column;gap:8px}}
+  .krow{{display:flex;justify-content:space-between;align-items:baseline;background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:10px 16px}}
+  .kname{{font-size:15px;font-weight:600}}
+  .kdrv{{font-size:12px;color:#8a867e}}
+  .kscore{{font-size:14px;font-weight:600;color:{GOLD}}}
 </style></head><body><div class="wrap">
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
@@ -239,6 +276,7 @@ def main() -> int:
 <span><b>Explore</b> experimentieren</span><span><b>Watch</b> beobachten</span></div>
 <div class="cards">{''.join(cards)}</div>
 {rej}
+{komp}
 {muster}
 <p class="note">{mode_note}. Erzeugt aus der Instanz mit view/render.py — read-only.</p>
 </div></body></html>"""
@@ -250,6 +288,8 @@ def main() -> int:
     out.write_text(doc, encoding="utf-8")
     print(f"Modus: {args.mode} · {len(placed)} Einträge platziert"
           + (f", {len(rejected)} Reject" if rejected else ""))
+    if reco:
+        print("Kompetenzempfehlung (abgeleitet): " + " · ".join(reco))
     print(f"Geschrieben: {out}")
     return 0
 
