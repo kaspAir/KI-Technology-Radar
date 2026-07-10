@@ -278,6 +278,9 @@ def main() -> int:
             )
 
     # --- Events (Instanz, JSON Lines) -------------------------------------------
+    obs_ids = {o["id"] for o in observations if "id" in o}
+    assess_ids = {a["id"] for a in assessments if "id" in a}
+    known_by_prefix = {"obs.": obs_ids, "entry.": entry_ids, "assess.": assess_ids}
     events_log = inst / "events" / "events.log"
     if events_log.exists():
         for n, line in enumerate(events_log.read_text(encoding="utf-8").splitlines(), 1):
@@ -289,7 +292,13 @@ def main() -> int:
             except json.JSONDecodeError as ex:
                 rep.error(f"events.log:{n}: kein gueltiges JSON ({ex.msg})")
                 continue
-            check(schemas["event"], ev, f"events.log:{n}", rep)
+            if not check(schemas["event"], ev, f"events.log:{n}", rep):
+                continue
+            # Subjekt-Referenz prüfen, soweit die Klasse bekannt ist (dangling fangen).
+            subj = ev.get("subject_id", "")
+            for prefix, known in known_by_prefix.items():
+                if subj.startswith(prefix) and subj not in known:
+                    rep.warn(f"events.log:{n}: subject_id '{subj}' existiert nicht (dangling)")
     else:
         rep.warn("Keine events/events.log gefunden — Historie leer (E21)")
 
