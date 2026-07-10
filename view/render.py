@@ -82,6 +82,10 @@ def main() -> int:
     if not inst.is_absolute():
         inst = (Path.cwd() / inst).resolve()
 
+    # Jurisdiktion (A1): Land dieser Instanz + Manifest fuer den Umschalter.
+    country = load_yaml(inst / "country.yaml") if (inst / "country.yaml").exists() else None
+    manifest = collect(inst, "countries.yaml", "countries")
+
     # Bereiche (nur oberste Ebene) als Sektoren, in Katalog-Reihenfolge.
     area_terms = [t for t in collect(CORE / "vocab-core", "area.yaml", "terms")
                   if not t.get("parent_id")]
@@ -187,6 +191,23 @@ def main() -> int:
     stamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
     mode_note = ("Öffentliche Ansicht (Allowlist, E26)" if args.mode == "public"
                  else "Interne Ansicht — enthält private Wertung (E25), nicht veröffentlichen")
+
+    # Länder-Umschalter (A1): navigiert zwischen den Länder-Radaren (je Land eine Instanz).
+    cur_code = (country or {}).get("code")
+    sel_entries = manifest or ([country] if country else [])
+    opts = []
+    for c in sel_entries:
+        lbl = f'{c.get("flag", "")} {c.get("label", c.get("code", ""))}'.strip()
+        if c.get("status") == "planned" or not c.get("url"):
+            opts.append(f'<option disabled>{esc(lbl)} — in Vorbereitung</option>')
+        else:
+            sel = " selected" if c.get("code") == cur_code else ""
+            opts.append(f'<option value="{esc(c["url"])}"{sel}>{esc(lbl)}</option>')
+    country_sel = ""
+    if opts:
+        country_sel = ('<label class="jur">Jurisdiktion&nbsp;'
+                       '<select onchange="if(this.value)location.href=this.value">'
+                       + "".join(opts) + "</select></label>")
     rej = ""
     if rejected:
         names = ", ".join(esc(e.get("name")) for e in rejected)
@@ -244,7 +265,9 @@ def main() -> int:
   .wrap{{max-width:720px;margin:0 auto}}
   .sig{{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:{GOLD};margin:0}}
   h1{{font-size:26px;font-weight:600;margin:2px 0 2px}}
-  .sub{{color:#6b6862;font-size:14px;margin:0 0 18px}}
+  .sub{{color:#6b6862;font-size:14px;margin:0 0 8px}}
+  .jur{{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#6b6862;margin:0 0 18px}}
+  .jur select{{font:inherit;color:{INK};background:#fff;border:1px solid #e7e3da;border-radius:8px;padding:4px 8px}}
   .legend{{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:#6b6862;margin:8px 0 18px}}
   .legend b{{color:{INK};font-weight:500}}
   .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}}
@@ -270,6 +293,7 @@ def main() -> int:
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
 <p class="sub">Stand {stamp} · {len(placed)} Einträge</p>
+{country_sel}
 {''.join(svg)}
 <div class="legend"><b>Ringe (innen→aussen):</b>
 <span><b>Adopt</b> produktiv nutzen</span><span><b>Pilot</b> real erproben</span>

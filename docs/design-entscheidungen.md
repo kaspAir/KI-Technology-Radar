@@ -108,6 +108,12 @@ Schema"):
 - Nutzen: derselbe Kern-Radar wird länderübergreifend einsetzbar; nur die
   Länder-Konfiguration und die Instanzdaten unterscheiden sich.
 
+**Umgesetzt (A1, erster Schritt):** Land als Instanz-Konfiguration (`country.yaml`,
+gegen `country.schema` validiert) und ein **Länder-Umschalter** im Radar (aus
+`countries.yaml`), der zwischen den Länder-Radaren navigiert — je Land eine
+Instanz. **Noch offen:** die je-Land-Einschätzung EINES Eintrags *innerhalb* einer
+Instanz (mehrere Jurisdiktionen pro Instanz) — der grössere Modellschritt.
+
 ### A2 — Benutzerverwaltung & Mandantenfähigkeit (Architektur-Evolution)
 Perspektivisch braucht es Zugriffsschutz (Authentifizierung/Rollen) und die
 Fähigkeit, mehrere Organisationen zu bedienen. **Das steht in Spannung zur

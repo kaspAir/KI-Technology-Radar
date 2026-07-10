@@ -155,7 +155,7 @@ def main() -> int:
 
     schemas = {
         n: load_schema(n)
-        for n in ("term", "source", "observation", "radar-entry", "assessment", "event", "pattern")
+        for n in ("term", "source", "observation", "radar-entry", "assessment", "event", "pattern", "country")
     }
 
     # --- Vokabular: Kern + Instanz zusammenfuehren ------------------------------
@@ -195,6 +195,15 @@ def main() -> int:
     for p in patterns:
         if check(schemas["pattern"], p, f"pattern {p.get('id', '?')}", rep):
             pattern_ids.add(p["id"])
+
+    # --- Jurisdiktion (A1): Land als Instanz-Konfiguration + Länder-Manifest ---
+    cfile = inst / "country.yaml"
+    if cfile.exists():
+        check(schemas["country"], load_yaml(cfile), "country.yaml", rep)
+    else:
+        rep.warn("Keine country.yaml — Jurisdiktion unbestimmt (A1)")
+    for c in yaml_docs(inst, "countries.yaml", "countries"):
+        check(schemas["country"], c, f"country {c.get('code', '?')}", rep)
 
     # --- Sources (Instanz) ------------------------------------------------------
     sources = yaml_docs(inst / "sources", "*.yaml", "sources")
