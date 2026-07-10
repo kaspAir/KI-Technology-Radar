@@ -7,29 +7,34 @@
 #
 # Erwartete Variablen (in Jenkins als Global-Env/Credentials setzen):
 #   DEPLOY_ENABLED=true            schaltet den Deploy scharf (sonst übersprungen)
-#   DEPLOY_HOST=<host>             SSH-Host (Infomaniak)
-#   DEPLOY_USER=<user>            SSH-User (optional, sonst aus Credential/ssh-config)
+#   DEPLOY_HOST=<user@host>        SSH-Ziel
+#   DEPLOY_USER=<user>            optional, falls nicht in DEPLOY_HOST enthalten
 #   DEPLOY_PATH_DEV=<docroot>     Docroot der jeweiligen Subdomain
 #   DEPLOY_PATH_TEST / _INT / _PROD
-#   SSH_OPTS=<opts>              optionale ssh-Optionen (z.B. -i <key>)
+#   SSH_OPTS=<opts>              optionale ssh-Optionen
 #
 # Ohne Konfiguration endet das Skript mit Exit 0 (Build bleibt grün).
 set -euo pipefail
 
-env="${RADAR_ENV:?RADAR_ENV fehlt}"
+# Führende/abschliessende Leerzeichen, Tabs und CR aus Werten entfernen —
+# tolerant gegenüber versehentlichem Whitespace in Jenkins-Feldern.
+trim() { printf '%s' "${1:-}" | tr -d '\t\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+
+env="$(trim "${RADAR_ENV:?RADAR_ENV fehlt}")"
 case "$env" in
-  dev)  docroot="${DEPLOY_PATH_DEV:-}"  ;;
-  test) docroot="${DEPLOY_PATH_TEST:-}" ;;
-  int)  docroot="${DEPLOY_PATH_INT:-}"  ;;
-  prod) docroot="${DEPLOY_PATH_PROD:-}" ;;
+  dev)  docroot="$(trim "${DEPLOY_PATH_DEV:-}")"  ;;
+  test) docroot="$(trim "${DEPLOY_PATH_TEST:-}")" ;;
+  int)  docroot="$(trim "${DEPLOY_PATH_INT:-}")"  ;;
+  prod) docroot="$(trim "${DEPLOY_PATH_PROD:-}")" ;;
   *) echo "Unbekannte Umgebung: $env"; exit 1 ;;
 esac
 
-host="${DEPLOY_HOST:-}"
-user="${DEPLOY_USER:-}"
+enabled="$(trim "${DEPLOY_ENABLED:-}")"
+host="$(trim "${DEPLOY_HOST:-}")"
+user="$(trim "${DEPLOY_USER:-}")"
 target="${user:+$user@}${host}"
 
-if [ "${DEPLOY_ENABLED:-}" != "true" ] || [ -z "$host" ] || [ -z "$docroot" ]; then
+if [ "$enabled" != "true" ] || [ -z "$host" ] || [ -z "$docroot" ]; then
   echo "Deploy ($env) nicht konfiguriert (DEPLOY_ENABLED/DEPLOY_HOST/DEPLOY_PATH_* fehlen) — übersprungen."
   exit 0
 fi

@@ -97,9 +97,9 @@ pipeline {
     // aber DEPLOY_HOST gesetzt wurde, die Subdomain-Docroots am Host auflisten
     // (rein lesend). Sobald DEPLOY_ENABLED=true, wird diese Stage übersprungen.
     stage('Deploy-Ziel ermitteln') {
-      when { expression { env.DEPLOY_ENABLED != 'true' && env.DEPLOY_HOST } }
+      when { expression { env.DEPLOY_ENABLED?.trim() != 'true' && env.DEPLOY_HOST?.trim() } }
       steps {
-        sshagent(credentials: [env.DEPLOY_CREDENTIAL ?: 'ki-tech-radar-deploy']) {
+        sshagent(credentials: [(env.DEPLOY_CREDENTIAL?.trim() ?: 'ki-tech-radar-deploy')]) {
           sh '''
             ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST" 'echo "HOME=$HOME"; echo "=== ~/sites ==="; ls -1 ~/sites 2>/dev/null; echo "=== Kandidaten (ki-tech-radar) ==="; find ~ -maxdepth 4 -iname "*ki-tech-radar*" 2>/dev/null'
           '''
@@ -111,9 +111,9 @@ pipeline {
     // nur scharf bei DEPLOY_ENABLED=true — sonst sauber übersprungen, Build bleibt
     // grün. Nur der öffentliche Kern wird deployt, nie die private Instanz.
     stage('Deploy') {
-      when { expression { env.DEPLOY_ENABLED == 'true' } }
+      when { expression { env.DEPLOY_ENABLED?.trim() == 'true' } }
       steps {
-        sshagent(credentials: [env.DEPLOY_CREDENTIAL ?: 'ki-tech-radar-deploy']) {
+        sshagent(credentials: [(env.DEPLOY_CREDENTIAL?.trim() ?: 'ki-tech-radar-deploy')]) {
           sh '''
             export SSH_OPTS="-o StrictHostKeyChecking=no"
             bash deploy/deploy.sh
