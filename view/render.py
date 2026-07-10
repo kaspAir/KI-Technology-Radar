@@ -315,6 +315,8 @@ def main() -> int:
         crit_of: dict[str, tuple] = {}
         for ca in collect(inst / "competences", "*.yaml", "competence_assessments"):
             cid = ca.get("competence_id")
+            if asof and ca.get("valid_from", "") > asof:
+                continue                                   # Urteil gab es damals noch nicht
             if cid and (cid not in crit_of or ca.get("valid_from", "") >= crit_of[cid][1]):
                 crit_of[cid] = (ca.get("criticality", 0), ca.get("valid_from", ""))
         dmap = {cid: v[0] for cid, v in tally.items()}
