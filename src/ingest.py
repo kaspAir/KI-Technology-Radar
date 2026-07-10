@@ -177,9 +177,26 @@ def draft_real(item, source_id, run_date, rubric, scope, model, max_tokens):
         '"bestehende entry.<id> ODER Vorschlag für neuen Eintragsnamen", '
         '"reason": "kurze Begründung fürs Kuratieren"}'
     )
+    def extract(t: str):
+        t = re.sub(r"```(?:json)?", "", t or "").strip()
+        i, j = t.find("{"), t.rfind("}")
+        if i != -1 and j > i:
+            try:
+                return json.loads(t[i:j + 1])
+            except Exception:
+                return None
+        return None
+
     text, usage = call_anthropic(model, system, user, max_tokens)
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    verdict = json.loads(m.group(0)) if m else {"relevant": False, "reason": "keine JSON-Antwort"}
+    verdict = extract(text)
+    if verdict is None:  # ein strenger Nachschlag, dann aufgeben (verhindert Treffer-Verlust)
+        text2, u2 = call_anthropic(
+            model, system,
+            user + "\n\nWICHTIG: Antworte AUSSCHLIESSLICH mit dem JSON-Objekt — keine Prosa, keine Code-Fences.",
+            max_tokens)
+        usage = {"input_tokens": usage.get("input_tokens", 0) + u2.get("input_tokens", 0),
+                 "output_tokens": usage.get("output_tokens", 0) + u2.get("output_tokens", 0)}
+        verdict = extract(text2) or {"relevant": False, "reason": "keine JSON-Antwort (auch nach Nachschlag)"}
     obs = None
     if verdict.get("relevant"):
         obs = {
