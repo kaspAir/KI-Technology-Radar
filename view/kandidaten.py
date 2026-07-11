@@ -75,6 +75,19 @@ def main() -> int:
             d = load_yaml(p)
             if isinstance(d, dict) and "candidates" in d:
                 cands.extend(d["candidates"])
+    # Pool = Archiv aller Funde; die Ansicht zeigt nur die NOCH NICHT ratifizierten
+    # (deren Beleg-URL noch nicht im Radar ist).
+    on_radar = {o.get("url") for o in collect(inst / "entries", "observations.yaml", "observations")
+                if o.get("url")}
+    seen, uniq = set(), []
+    for c in cands:
+        u = c.get("observation", {}).get("url")
+        if u and (u in on_radar or u in seen):
+            continue
+        if u:
+            seen.add(u)
+        uniq.append(c)
+    cands = uniq
 
     def src_link(sid, target):
         # Link zeigt auf den ARTIKEL (target=obs.url) wenn vorhanden, sonst auf die Quelle.

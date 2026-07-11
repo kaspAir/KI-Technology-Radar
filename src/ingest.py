@@ -341,6 +341,9 @@ def main() -> int:
     ap.add_argument("--source-file", default=None, help="lokale Atom-XML statt Netz (Test/Reproduktion)")
     ap.add_argument("--run-date", default=datetime.date.today().isoformat())
     ap.add_argument("--out", default=None, help="Ausgabeverzeichnis (Default: <instance>/inbox)")
+    ap.add_argument("--pool", default=None,
+                    help="Pfad zum DAUERHAFTEN Beleg-Pool (P1): merge+dedup statt Wegwerfen. "
+                         "Bereits bekannte Items werden VOR dem Modellaufruf übersprungen (spart Kosten).")
     args = ap.parse_args()
 
     inst = Path(args.instance)
@@ -376,6 +379,22 @@ def main() -> int:
         print(f"  {s['id']}: {len(got)} Items")
         items.extend(got)
     print(f"Geholt: {len(items)} Items aus {len(todo)} Quelle(n) (seit {args.since or 'Anfang'})")
+
+    # P1 — dauerhafter Pool: bereits bekannte Belege (Pool ∪ Radar) kennen, um sie VOR
+    # dem Modellaufruf zu überspringen (Dedup + Kostenersparnis über die Zeit).
+    pool_path = Path(args.pool) if args.pool else None
+    if pool_path and not pool_path.is_absolute():
+        pool_path = (Path.cwd() / pool_path).resolve()
+    pool_cands = []
+    if pool_path and pool_path.exists():
+        pd = load_yaml(pool_path)
+        pool_cands = pd.get("candidates", []) if isinstance(pd, dict) else []
+    known_urls = {c.get("observation", {}).get("url") for c in pool_cands if c.get("observation", {}).get("url")}
+    if args.pool:  # Radar-Belege ebenfalls als bekannt behandeln (nicht neu entwerfen)
+        for o in collect(inst / "entries", "observations.yaml", "observations"):
+            if o.get("url"):
+                known_urls.add(o["url"])
+    n_known = 0
 
     # Bekannte Branchen (domain-Taxonomie) — für Prompt UND Validierung der Zuordnung.
     domains = collect(CORE / "vocab-core", "domain.yaml", "terms")
@@ -414,6 +433,9 @@ def main() -> int:
                 and running_cost() >= args.max_cost_usd):
             report_rows.append(("—", it["title"][:60], f"GESTOPPT (Kosten-Deckel ${args.max_cost_usd:.2f})"))
             break
+        if it.get("url") and it["url"] in known_urls:   # P1: schon im Pool/Radar → kein Modellaufruf
+            n_known += 1
+            continue
         if args.dry_run:
             c = draft_dry(it, args.run_date)
             verdict = {"ai_related": True, "reason": "dry-run"}
@@ -434,6 +456,8 @@ def main() -> int:
             # unbekannte Branchen aussortieren; leere → Querschnitt (nichts erfinden)
             c["branchen"] = [b for b in c["branchen"] if b in known_branchen] or ["domain.querschnitt-grundlagen"]
             cands.append(c)
+            if c["observation"].get("url"):
+                known_urls.add(c["observation"]["url"])   # innerhalb des Laufs nicht doppeln
             br = ", ".join(b.split(".", 1)[-1] for b in c["branchen"])
             report_rows.append(("✓", it["title"][:60],
                                 f'[{br}] rel {c.get("relevance_general", "—")} → {c.get("suggested_entry") or "?"}'))
@@ -442,7 +466,16 @@ def main() -> int:
 
     outdir.mkdir(parents=True, exist_ok=True)
     stamp = f"{args.run_date}-{'dry' if args.dry_run else slugify(args.model)}"
-    if cands:
+    if pool_path is not None:
+        # P1: neue Kandidaten in den dauerhaften Pool mergen (append, dedup ist schon
+        # via known_urls passiert) und zurückschreiben.
+        merged = pool_cands + cands
+        pool_path.parent.mkdir(parents=True, exist_ok=True)
+        pool_path.write_text(yaml.safe_dump({"candidates": merged}, allow_unicode=True,
+                                            sort_keys=False), encoding="utf-8")
+        print(f"Pool: +{len(cands)} neu, {n_known} bereits bekannt übersprungen "
+              f"→ {len(merged)} gesamt ({pool_path})")
+    elif cands:
         obs_path = outdir / f"ingest-{stamp}.yaml"
         obs_path.write_text(yaml.safe_dump({"candidates": cands}, allow_unicode=True,
                                            sort_keys=False), encoding="utf-8")
@@ -453,7 +486,8 @@ def main() -> int:
     lines = [f"# Ingestion-Lauf {stamp}", "",
              f"- Quellen: {quellen} · seit {args.since or 'Anfang'}",
              f"- Modus: {'DRY-RUN (kostenlos)' if args.dry_run else args.model}",
-             f"- Items geholt: {len(items)} · Kandidaten: {len(cands)}",
+             f"- Items geholt: {len(items)} · neue Kandidaten: {len(cands)}"
+             + (f" · bereits bekannt (übersprungen): {n_known}" if args.pool else ""),
              f"- Deckel: max_items {args.max_items}, max_output_tokens {args.max_output_tokens}",
              f"- Tokens: {tok_in} in / {tok_out} out"
              + (f" · geschätzte Kosten: ${cost:.4f}" if (args.price_in or args.price_out)

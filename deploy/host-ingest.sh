@@ -38,14 +38,22 @@ if [ ! -x venv/bin/python ]; then python3 -m venv venv; ./venv/bin/pip install -
 ./venv/bin/python -c "import yaml, jsonschema" 2>/dev/null || ./venv/bin/pip install -q pyyaml jsonschema
 PY=./venv/bin/python
 
-# ---- Ingestion (rollierendes Fenster) -----------------------------------------
-rm -f instance/inbox/ingest-*.yaml instance/inbox/ingest-*-report.md 2>/dev/null || true
+# ---- Ingestion in den DAUERHAFTEN Pool (P1: mergen + dedup, nicht leeren) ------
 SINCE="$(date -d "${SINCE_DAYS} days ago" +%Y-%m-%d 2>/dev/null || echo "")"
 echo "[$(date '+%F %T')] Ingestion: alle Quellen, seit ${SINCE:-Anfang}, max ${MAX_ITEMS}/Quelle, Deckel \$${MAX_COST}"
 $PY core/src/ingest.py --instance instance --all-sources --since "$SINCE" \
     --max-items "$MAX_ITEMS" --max-output-tokens 120000 --model "$MODEL" \
     --price-in "$PRICE_IN" --price-out "$PRICE_OUT" --max-cost-usd "$MAX_COST" \
-    --out instance/inbox
+    --pool instance/inbox/pool.yaml --out instance/inbox
+
+# ---- Pool versionieren (dauerhaft, nachvollziehbar) ---------------------------
+if ! git -C instance diff --quiet -- inbox/pool.yaml 2>/dev/null; then
+  git -C instance add inbox/pool.yaml
+  git -C instance -c user.email=ingest@ki-tech-radar -c user.name="ingest-agent" \
+      commit -q -m "data(pool): nächtliche Ingestion (dauerhafter Beleg-Pool)" || true
+  git -C instance pull -q --rebase --ff-only origin dev 2>/dev/null || true
+  git -C instance push -q origin dev 2>/dev/null || echo "Hinweis: Pool-Push fehlgeschlagen (Pool ist lokal aktualisiert)."
+fi
 
 # ---- Validieren + Site bauen --------------------------------------------------
 $PY core/src/validate.py --instance instance
