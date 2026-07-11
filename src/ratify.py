@@ -89,6 +89,9 @@ def main() -> int:
     valid_domains = {t["id"] for t in collect(CORE / "vocab-core", "domain.yaml", "terms")}
     src_type = {s["id"]: s.get("type") for s in collect(inst / "sources", "*.yaml", "sources")}
     existing = {e["id"] for e in collect(inst / "entries", "entry.yaml", "entries")}
+    # Dedup: bereits im Radar vorhandene Belege (URL) nicht erneut aufnehmen.
+    on_radar = {o.get("url") for o in collect(inst / "entries", "observations.yaml", "observations")
+                if o.get("url")}
 
     # nächste freie evt.rat-Nummer bestimmen
     elog = inst / "events" / "events.log"
@@ -114,7 +117,12 @@ def main() -> int:
         if not title or eidv in existing:
             skipped.append((title or "(ohne Titel)", "existiert bereits / kein Titel"))
             continue
+        if o.get("url") and o["url"] in on_radar:
+            skipped.append((title, "Beleg schon im Radar (Dedup)"))
+            continue
         existing.add(eidv)
+        if o.get("url"):
+            on_radar.add(o["url"])
         branchen = [b for b in (c.get("branchen") or []) if b in valid_domains] or ["domain.querschnitt-grundlagen"]
         area = TYPE_AREA.get(src_type.get((o.get("source_ids") or [""])[0]), "area.markt-praxis")
         first_seen = o.get("date_published") or args.run_date
