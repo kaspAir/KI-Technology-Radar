@@ -1,0 +1,44 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}KI-Radar{% endblock %}</title>
+<style>
+  :root{--gold:#C0851F;--ink:#23262D;--paper:#F8F6F2}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:24px}
+  header{display:flex;align-items:baseline;gap:18px;border-bottom:1px solid #e7e3da;padding:14px 24px;background:#fff}
+  header .brand{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);font-weight:600}
+  header nav{margin-left:auto;display:flex;gap:16px;align-items:baseline}
+  header a{color:var(--ink);text-decoration:none;font-size:14px}
+  header a.active{color:var(--gold);font-weight:600}
+  h1{font-size:24px;font-weight:600;margin:6px 0 2px}
+  .sub{color:#6b6862;font-size:14px;margin:0 0 18px}
+  .card{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px;margin:10px 0}
+  .chip{display:inline-block;background:var(--paper);border:1px solid #e7e3da;border-radius:999px;padding:2px 10px;font-size:12px;color:#6b6862;margin:1px}
+  .rel{color:var(--gold);font-weight:600;font-size:12px}
+  a.art{color:var(--gold);text-decoration:none;border-bottom:1px solid rgba(192,133,31,.35);font-size:12px}
+  .sum{font-size:13.5px;line-height:1.5;color:#4a4741;margin:6px 0}
+  select,input,button{font:inherit}
+  select,input{border:1px solid #e7e3da;border-radius:8px;padding:6px 9px;background:#fff;color:var(--ink)}
+  button{cursor:pointer;background:var(--gold);color:#fff;border:none;border-radius:8px;padding:6px 12px}
+  button.ghost{background:#fff;color:var(--ink);border:1px solid #e7e3da}
+  .err{background:#fff;border-left:3px solid #b3261e;border-radius:6px;padding:8px 12px;color:#8a1c15;font-size:13.5px;margin:0 0 12px}
+  .authbox{max-width:360px;margin:8vh auto;background:#fff;border:1px solid #e7e3da;border-radius:14px;padding:24px}
+  .authbox label{display:block;font-size:13px;color:#6b6862;margin:10px 0 4px}
+  .authbox input{width:100%;box-sizing:border-box}
+  .authbox button{width:100%;margin-top:16px;padding:10px}
+  .muted{font-size:12px;color:#8a867e}
+  .ringhead{font-size:13px;color:var(--gold);font-weight:600;margin:18px 0 4px;text-transform:uppercase;letter-spacing:.08em}
+  .row{display:flex;gap:10px;align-items:flex-start}
+  .grow{flex:1}
+</style></head><body>
+{% if user %}
+<header><span class="brand">Aletheia · Radar</span>
+<nav>
+  <a href="/proposals" class="{{ 'active' if active=='proposals' }}">Vorschläge</a>
+  <a href="/radar" class="{{ 'active' if active=='radar' }}">Mein Radar</a>
+  <span class="muted">{{ user.email }}</span>
+  <a href="/logout">Abmelden</a>
+</nav></header>
+{% endif %}
+<div class="wrap">{% block body %}{% endblock %}</div>
+</body></html>

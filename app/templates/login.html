@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Anmelden — KI-Radar{% endblock %}
+{% block body %}
+<div class="authbox">
+  <p class="brand" style="letter-spacing:.3em;text-transform:uppercase;color:var(--gold);font-size:12px;font-weight:600;margin:0">Aletheia · Radar</p>
+  <h1>Anmelden</h1>
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+  <form method="post" action="/login">
+    <label>E-Mail</label><input type="email" name="email" required autofocus>
+    <label>Passwort</label><input type="password" name="pw" required>
+    <button type="submit">Anmelden</button>
+  </form>
+  <p class="muted" style="margin-top:14px">Noch kein Konto? <a href="/signup" style="color:var(--gold)">Registrieren</a></p>
+</div>
+{% endblock %}

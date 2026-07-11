@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% set active='radar' %}{% block title %}Mein Radar — KI-Radar{% endblock %}
+{% block body %}
+<h1>Mein Radar</h1>
+<p class="sub">Deine kuratierte Sicht — {{ n }} Einträge. Aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> aufgenommen; jederzeit anpassbar.</p>
+
+{% if n == 0 %}
+  <div class="card"><p class="sum">Noch leer. Geh zu den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> und nimm auf, was dich interessiert.</p></div>
+{% endif %}
+
+{% for r in rings %}
+  {% set group = by_ring.get(r) %}
+  {% if group %}
+  <div class="ringhead">{{ r }} <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ group|length }}</span></div>
+  {% for cur, p in group %}
+  <article class="card">
+    <div class="row">
+      <div class="grow">
+        <div>{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}</div>
+        <div style="font-size:15px;font-weight:600;margin:4px 0 2px">
+          {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
+        <p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>
+      </div>
+      <form method="post" action="/remove">
+        <input type="hidden" name="curation_id" value="{{ cur.id }}">
+        <button type="submit" class="ghost">entfernen</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+  {% endif %}
+{% endfor %}
+{% endblock %}

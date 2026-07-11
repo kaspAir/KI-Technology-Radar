@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+jinja2
+itsdangerous
+python-multipart
+pyyaml
+# Produktion (MariaDB): zusätzlich pymysql  (RADAR_DB=mysql+pymysql://user:pw@host/db)
