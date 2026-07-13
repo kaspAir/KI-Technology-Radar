@@ -355,11 +355,22 @@ def main() -> int:
             if cid and (cid not in crit_of or ca.get("valid_from", "") >= crit_of[cid][1]):
                 crit_of[cid] = (ca.get("criticality", 0), ca.get("valid_from", ""))
         dmap = {cid: v[0] for cid, v in tally.items()}
-        maxd = max(dmap.values(), default=0)
+        # "wenig Nachfrage" robust bestimmen: NICHT am absoluten Maximum (ein einzelnes
+        # stark nachgefragtes Feld wie KI-Aufsicht verzerrt die Schwelle), sondern am
+        # Median der tatsächlich nachgefragten Kompetenzen. Zudem: eine bereits als
+        # Top-Nachfrage EMPFOHLENE Kompetenz ist per Definition keine Erosionslücke —
+        # sie hier auszuschliessen verhindert den Widerspruch, dass dieselbe Kompetenz
+        # zugleich unter "entwickeln" und unter "Erosion" steht (z.B. Datenschutz).
+        reco_ids = {cid for cid, _ in ranked[:6]}
+        demanded = sorted(v for v in dmap.values() if v > 0)
+        median_d = demanded[len(demanded) // 2] if demanded else 0
+        low_cut = 0.25 * median_d
         erows = []
         for cid, (crit, _) in crit_of.items():
             d = dmap.get(cid, 0)
-            if not (crit >= 4 and (d == 0 or d < 0.4 * maxd)):
+            if cid in reco_ids:
+                continue
+            if not (crit >= 4 and d <= low_cut):
                 continue
             erows.append(
                 f'<a class="krow" href="detailkomp-{esc(cid.split(".", 1)[-1])}.html">'
