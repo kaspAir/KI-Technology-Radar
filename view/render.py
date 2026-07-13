@@ -165,6 +165,7 @@ def main() -> int:
             continue
         groups.setdefault((aid, ring), []).append(e)
 
+    theme_rows = []   # für die clientseitige, überlappungsfreie Ansicht (JS-Layout)
     for (aid, ring), es in groups.items():
         base = sector_center[aid]
         span = 46  # Grad Streuung innerhalb Sektor/Ring
@@ -172,6 +173,13 @@ def main() -> int:
             off = 0 if len(es) == 1 else (k - (len(es) - 1) / 2) * (span / max(1, len(es)))
             x, y = polar(base + off, RING_MID[ring])
             placed.append((e, latest.get(e["id"], {}), x, y))
+            slug = e["id"].split(".", 1)[-1]
+            theme_rows.append({
+                "id": slug, "name": e.get("name"), "ring": ring, "sector": aid,
+                "href": f"detail-{slug}.html", "dom": dom_data(e),
+            })
+    sectors_json = [{"id": aid, "label": area_label.get(aid, aid),
+                     "angle": sector_center[aid]} for aid in areas]
 
     # --- SVG bauen -----------------------------------------------------------
     svg = [f'<svg viewBox="0 0 680 460" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">']
@@ -382,6 +390,95 @@ def main() -> int:
                        '<span class="ksub">hohe Kritikalität × wenig Nachfrage — Erosion/Lücke: siehe Bericht</span></h2>'
                        '<div class="komp">' + "".join(erows) + "</div>")
 
+    # Client-Layout: Themendaten + Sektoren als JSON, dann die Render-Engine.
+    radar_js_data = ("const THEMES=" + json.dumps(theme_rows, ensure_ascii=False)
+                     + ";\nconst SECTORS=" + json.dumps(sectors_json, ensure_ascii=False) + ";\n")
+    script_js = r"""
+const GOLD='#C0851F',INK='#23262D';
+const RINGORDER=['Adopt','Pilot','Explore','Watch'];
+const RINGMEAN={Adopt:'produktiv nutzen',Pilot:'real erproben',Explore:'experimentieren',Watch:'beobachten'};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function curFilter(){var s=document.getElementById('bran');return s?s.value:'';}
+function matches(t,f){return !f||((' '+(t.dom||'')+' ').indexOf(' '+f+' ')>=0);}
+function byRingOf(list){var m={};list.forEach(function(t){(m[t.ring]=m[t.ring]||[]).push(t);});return m;}
+
+function renderColumns(byRing){
+  var h='',any=false;
+  RINGORDER.forEach(function(ring){
+    var ts=byRing[ring];if(!ts||!ts.length)return;any=true;
+    h+='<section class="rpanel"><div class="rphead"><span class="rpname">'+ring+'</span><span class="rpmean">'+RINGMEAN[ring]+'</span><span class="rpcount">'+ts.length+'</span></div><div class="rpcols" style="--nsec:'+SECTORS.length+'">';
+    SECTORS.forEach(function(sec){
+      var st=ts.filter(function(t){return t.sector===sec.id;});
+      h+='<div class="rpcol"><div class="rpcolh">'+esc(sec.label)+'</div>';
+      st.forEach(function(t){h+='<a class="chip" href="'+t.href+'">'+esc(t.name)+'</a>';});
+      if(!st.length)h+='<div class="rpempty">–</div>';
+      h+='</div>';
+    });
+    h+='</div></section>';
+  });
+  return any?h:'<p class="rpnone">Keine Themen für diese Branche.</p>';
+}
+
+function miniRadar(ts){
+  var n=SECTORS.length,cx=350,R=92,minGap=17;
+  var pts=[];
+  SECTORS.forEach(function(sec){
+    var st=ts.filter(function(t){return t.sector===sec.id;}),m=st.length,span=30;
+    st.forEach(function(t,k){
+      var off=m===1?0:(k-(m-1)/2)*(span/Math.max(1,m));
+      var ang=(sec.angle+off)*Math.PI/180,br=R*(0.66-(k%3)*0.12);
+      pts.push({t:t,cos:Math.cos(ang),br:br,right:Math.cos(ang)>=-0.0001,dy:Math.sin(ang)*br});
+    });
+  });
+  ['right','left'].forEach(function(side){
+    var isR=side==='right';
+    var g=pts.filter(function(p){return p.right===isR;}).sort(function(a,b){return a.dy-b.dy;});
+    g.forEach(function(p,i){p.ly=(i===0)?p.dy:Math.max(p.dy,g[i-1].ly+minGap);});
+  });
+  var maxAbs=60;pts.forEach(function(p){maxAbs=Math.max(maxAbs,Math.abs(p.ly),Math.abs(p.dy));});
+  var H=Math.max(210,2*maxAbs+50),cy=H/2;
+  var s=['<svg viewBox="0 0 700 '+H.toFixed(0)+'" class="mini" xmlns="http://www.w3.org/2000/svg">'];
+  s.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+GOLD+'" fill-opacity="0.10" stroke="'+INK+'" stroke-opacity="0.18"/>');
+  for(var i=0;i<n;i++){var b=(-90-(360/n)/2+i*(360/n))*Math.PI/180;s.push('<line x1="'+cx+'" y1="'+cy+'" x2="'+(cx+R*Math.cos(b)).toFixed(1)+'" y2="'+(cy+R*Math.sin(b)).toFixed(1)+'" stroke="'+INK+'" stroke-opacity="0.12"/>');}
+  // Sektor-Kurzmarke (Nummer) am Rand — die Namen stehen einmal in der Legende
+  // darüber. So kollidiert nichts mit den äusseren Theme-Labels.
+  SECTORS.forEach(function(sec,i){var a=sec.angle*Math.PI/180;var lx=cx+(R-11)*Math.cos(a),ly=cy+(R-11)*Math.sin(a);s.push('<text x="'+lx.toFixed(0)+'" y="'+(ly+3).toFixed(0)+'" text-anchor="middle" font-size="10" fill="'+INK+'" fill-opacity="0.4" font-weight="600">'+(i+1)+'</text>');});
+  s.push('<circle cx="'+cx+'" cy="'+cy+'" r="2.5" fill="'+INK+'" fill-opacity="0.5"/>');
+  pts.forEach(function(p){
+    var bx=cx+p.br*p.cos,by=cy+p.dy,lx=p.right?(cx+R+14):(cx-R-14),ly=cy+p.ly,el=p.right?(cx+R+6):(cx-R-6);
+    s.push('<a href="'+p.t.href+'" class="mblip"><polyline points="'+bx.toFixed(1)+','+by.toFixed(1)+' '+el.toFixed(1)+','+ly.toFixed(1)+' '+lx.toFixed(1)+','+ly.toFixed(1)+'" fill="none" stroke="'+INK+'" stroke-opacity="0.22"/><circle cx="'+bx.toFixed(1)+'" cy="'+by.toFixed(1)+'" r="4.5" fill="'+GOLD+'"/><text x="'+lx.toFixed(1)+'" y="'+(ly+3).toFixed(1)+'" text-anchor="'+(p.right?'start':'end')+'" font-size="11" fill="'+INK+'">'+esc(p.t.name)+'</text></a>');
+  });
+  s.push('</svg>');return s.join('');
+}
+
+function renderRadar(byRing){
+  var h='',any=false;
+  RINGORDER.forEach(function(ring){
+    var ts=byRing[ring];if(!ts||!ts.length)return;any=true;
+    h+='<section class="rpanel"><div class="rphead"><span class="rpname">'+ring+'</span><span class="rpmean">'+RINGMEAN[ring]+'</span><span class="rpcount">'+ts.length+'</span></div>'+miniRadar(ts)+'</section>';
+  });
+  if(!any)return '<p class="rpnone">Keine Themen für diese Branche.</p>';
+  var leg='<p class="seclegend">Sektoren (Ziffern im Radar, im Uhrzeigersinn ab oben): '+SECTORS.map(function(s,i){return '<b>'+(i+1)+'</b> '+esc(s.label);}).join(' · ')+'</p>';
+  return leg+h;
+}
+
+function renderRadarArea(){
+  var f=curFilter(),mode=localStorage.getItem('radarview')||'radar';
+  var byRing=byRingOf(THEMES.filter(function(t){return matches(t,f);}));
+  var el=document.getElementById('radararea');
+  if(el)el.innerHTML=(mode==='columns')?renderColumns(byRing):renderRadar(byRing);
+  document.querySelectorAll('.vbtn').forEach(function(b){b.className='vbtn'+(b.getAttribute('data-v')===mode?' on':'');});
+}
+function setView(m){localStorage.setItem('radarview',m);renderRadarArea();}
+function branf(){
+  var v=curFilter();
+  document.querySelectorAll('.cardlink').forEach(function(el){
+    el.style.display=(!v||((' '+(el.getAttribute('data-dom')||'')+' ').indexOf(' '+v+' ')>=0))?'':'none';
+  });
+  renderRadarArea();
+}
+document.addEventListener('DOMContentLoaded',renderRadarArea);
+"""
     doc = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KI-Technology-Radar</title>
@@ -425,14 +522,42 @@ def main() -> int:
   .kname{{font-size:15px;font-weight:600}}
   .kdrv{{font-size:12px;color:#8a867e}}
   .kscore{{font-size:14px;font-weight:600;color:{GOLD}}}
+  .viewtoggle{{display:inline-flex;border:1px solid #e7e3da;border-radius:9px;overflow:hidden;margin:0 0 16px}}
+  .vbtn{{font:inherit;font-size:13px;border:0;border-left:1px solid #e7e3da;background:#fff;color:#6b6862;padding:6px 13px;cursor:pointer}}
+  .vbtn:first-child{{border-left:0}}
+  .vbtn.on{{background:{GOLD};color:#fff}}
+  #radararea{{margin:0 0 6px}}
+  .rpanel{{background:#fff;border:1px solid #e7e3da;border-radius:14px;padding:14px 16px;margin:0 0 14px}}
+  .rphead{{display:flex;align-items:baseline;gap:9px;margin:0 0 10px}}
+  .rpname{{font-size:16px;font-weight:600;color:{GOLD}}}
+  .rpmean{{font-size:12.5px;color:#8a867e}}
+  .rpcount{{margin-left:auto;font-size:12.5px;color:#8a867e;background:#faf7f1;border:1px solid #eee7db;border-radius:20px;padding:1px 9px}}
+  .rpcols{{display:grid;grid-template-columns:repeat(var(--nsec,5),1fr);gap:10px}}
+  .rpcol{{min-width:0}}
+  .rpcolh{{font-size:11px;font-weight:600;color:#6b6862;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #eee7db;padding-bottom:4px;margin-bottom:7px}}
+  .chip{{display:block;font-size:12.5px;color:{INK};text-decoration:none;background:#faf7f1;border:1px solid #eee7db;border-radius:8px;padding:5px 9px;margin:0 0 6px;line-height:1.32}}
+  .chip:hover{{border-color:{GOLD};color:{GOLD}}}
+  .rpempty{{font-size:12px;color:#cfc9bd}}
+  .mini{{width:100%;height:auto;display:block}}
+  .mini text{{font-family:system-ui,sans-serif}}
+  .mblip{{cursor:pointer}}
+  .mblip:hover text{{fill:{GOLD}}}
+  .rpnone{{color:#8a867e;font-size:14px;padding:8px 2px}}
+  .seclegend{{font-size:11.5px;color:#8a867e;margin:0 0 12px;line-height:1.5}}
+  .seclegend b{{color:{INK}}}
+  @media(max-width:560px){{.rpcols{{grid-template-columns:repeat(2,1fr)}}}}
 </style></head><body><div class="wrap">
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
 {country_sel} {tsel} {bran_sel}
 <p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}</p>
-{''.join(svg)}
-<div class="legend"><b>Ringe (innen→aussen):</b>
+<div class="viewtoggle">
+<button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
+<button class="vbtn" data-v="columns" onclick="setView('columns')">▤ Sektor-Spalten</button></div>
+<div id="radararea"></div>
+<noscript>{''.join(svg)}</noscript>
+<div class="legend"><b>Ringe:</b>
 <span><b>Adopt</b> produktiv nutzen</span><span><b>Pilot</b> real erproben</span>
 <span><b>Explore</b> experimentieren</span><span><b>Watch</b> beobachten</span></div>
 <div class="cards">{''.join(cards)}</div>
@@ -441,11 +566,7 @@ def main() -> int:
 {erosion}
 {muster}
 <p class="note">{mode_note}. Erzeugt aus der Instanz mit view/render.py — read-only.</p>
-<script>
-function branf(){{var v=document.getElementById('bran').value;
-document.querySelectorAll('.blip,.cardlink').forEach(function(el){{
-el.style.display=(!v||(' '+(el.getAttribute('data-dom')||'')+' ').indexOf(' '+v+' ')>=0)?'':'none';}});}}
-</script>
+<script>{radar_js_data}{script_js}</script>
 </div></body></html>"""
 
     out = Path(args.out)
