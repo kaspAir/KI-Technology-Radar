@@ -196,26 +196,51 @@ def main() -> int:
     out = []
     w = out.append
 
-    # 1. Kritikalität + Begründung
+    # 1. Kritikalität — woraus: Herleitungskette KI-Entwurf -> Ratifizierung (E4/E9).
+    #    Anders als die Nachfrage ist die Kritikalität kein Aggregat, sondern ein
+    #    ratifiziertes Urteil — die Herkunft ist also diese Kette (mit Divergenz).
     if ca:
-        div = ""
-        if ca.get("draft_criticality") is not None and ca.get("draft_criticality") != crit:
-            div = (f'<p class="div">Divergenz (E9): KI-Entwurf Kritikalität '
-                   f'<b>{esc(ca.get("draft_criticality"))}</b> → ratifiziert <b>{esc(crit)}</b>.</p>')
+        dc = ca.get("draft_criticality")
+        diverges = dc is not None and dc != crit
+        arrow = ('↛ Divergenz (E9): der Mensch hat den KI-Wert korrigiert'
+                 if diverges else '→ vom Menschen bestätigt')
         w('<section class="card">'
           f'<div class="big"><span class="score">{esc(crit)}</span>'
           f'<span class="of">/5 · {esc(CRIT_MEAN.get(crit, ""))}</span></div>'
-          f'<p class="rat"><b>Ratifiziert (Mensch):</b> {esc(ca.get("rationale"))}</p>'
-          + (f'<p class="rat"><b>KI-Entwurf:</b> {esc(ca.get("draft_rationale"))}</p>'
-             if ca.get("draft_rationale") else "")
-          + div
-          + f'<p class="cite">Kritikalität = wie fundamental (unabhängig von der Nachfrage). '
-            f'Entwurf {esc(ca.get("draft_by"))}, ratifiziert {esc(ca.get("reviewer"))} '
-            f'am {ch_date(ca.get("valid_from"))}.</p>'
-          '</section>')
+          '<p class="cite">Kritikalität = wie fundamental die Kompetenz ist '
+          '(unabhängig von der Nachfrage). Sie ist ein ratifiziertes Urteil — '
+          'hier die Herleitung:</p>'
+          '<div class="chain">'
+          '<div class="cstep"><div class="csteph"><span class="cbadge">KI-Entwurf</span>'
+          f'<span class="csval">{esc(dc if dc is not None else "–")}/5</span>'
+          f'<span class="csby">{esc(ca.get("draft_by"))}</span></div>'
+          f'<p>{esc(ca.get("draft_rationale") or "—")}</p></div>'
+          f'<div class="carrow">{arrow}</div>'
+          '<div class="cstep"><div class="csteph"><span class="cbadge rat">Ratifiziert (Mensch)</span>'
+          f'<span class="csval">{esc(crit)}/5</span>'
+          f'<span class="csby">{esc(ca.get("reviewer"))} · {ch_date(ca.get("valid_from"))}</span></div>'
+          f'<p>{esc(ca.get("rationale") or "—")}</p></div>'
+          '</div></section>')
     else:
         w('<section class="card"><p class="rat">Für diese Kompetenz ist noch keine '
           'Kritikalität ratifiziert.</p></section>')
+
+    # 1b. Kritikalität im Zeitverlauf — nur wenn mehrfach bewertet (sonst genügt die
+    #     Herleitungskette oben). Zeigt jede Neubewertung mit Wert + Begründung + Δ.
+    if len(cas) > 1:
+        w("<h2>Kritikalität im Zeitverlauf</h2>")
+        w('<p class="cite">Jede Neubewertung mit ratifiziertem Wert und Begründung.</p>')
+        prevc = None
+        for c in cas:
+            cv = c.get("criticality", 0)
+            d = (f' <span class="ydelta">Δ {esc(prevc)}→{esc(cv)}</span>'
+                 if (prevc is not None and prevc != cv) else '')
+            w(f'<div class="yrow"><div class="yhead"><b>{ch_date(c.get("valid_from"))}</b> '
+              f'<span class="bar">{"▉" * cv if cv else "—"}</span> '
+              f'<span class="ysum">Kritikalität {esc(cv)}/5{d}</span></div>'
+              f'<div class="ycontrib" style="display:block;color:#3a3833">'
+              f'{esc(c.get("rationale") or c.get("draft_rationale") or "")}</div></div>')
+            prevc = cv
 
     # 2. Verdikt (Erosion / Blindspot / stabil)
     w(f'<h2>Einordnung</h2>')
@@ -332,6 +357,16 @@ def main() -> int:
   th,td{{text-align:left;padding:6px 8px;border-bottom:1px solid #e7e3da}}
   th{{color:#8a867e;font-weight:500}}
   .bar{{color:{GOLD};letter-spacing:1px}}
+  .chain{{margin-top:10px}}
+  .cstep{{background:{PAPER};border:1px solid #eee7db;border-radius:10px;padding:10px 12px}}
+  .csteph{{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}}
+  .cbadge{{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
+           color:#6b6862;background:#fff;border:1px solid #e7e3da;border-radius:6px;padding:2px 7px}}
+  .cbadge.rat{{color:#fff;background:{GOLD};border-color:{GOLD}}}
+  .csval{{font-size:16px;font-weight:700;color:{INK}}}
+  .csby{{margin-left:auto;font-size:12px;color:#8a867e;white-space:nowrap}}
+  .cstep p{{margin:0;font-size:13.5px;line-height:1.55;color:#3a3833}}
+  .carrow{{font-size:12.5px;color:#6b6862;text-align:center;padding:6px 0}}
   .yrow{{background:#fff;border:1px solid #e7e3da;border-radius:10px;padding:10px 14px;margin:8px 0}}
   .yhead{{display:flex;align-items:baseline;gap:8px;font-size:14px}}
   .ysum{{margin-left:auto;color:#6b6862;font-size:13px;white-space:nowrap}}
