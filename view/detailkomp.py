@@ -238,14 +238,42 @@ def main() -> int:
         w("<p>Aktuell kein hochrelevanter Eintrag treibt diese Kompetenz — daher keine "
           "abgeleitete Nachfrage (das kann Blindspot bedeuten, siehe Einordnung).</p>")
 
-    # 4. Nachfrage-Verlauf über die Zeit
+    # 4. Nachfrage-Verlauf über die Zeit — MIT Zusammensetzung je Jahr (Transparenz:
+    #    welche Themen treiben die Zahl, und was ändert den Sprung von Jahr zu Jahr?)
     if len(series) > 1:
-        w("<h2>Nachfrage im Zeitverlauf</h2>")
-        w('<table><tr><th>Ende Jahr</th><th>Nachfrage (aggregiert)</th></tr>')
+        w("<h2>Nachfrage im Zeitverlauf — woraus je Jahr</h2>")
+        w('<p class="cite">Die Nachfrage ist die Summe der Organisations-Relevanz der '
+          'hochrelevanten Radar-Themen, die diese Kompetenz brauchen. Sie ändert sich, '
+          'wenn Themen dazukommen, den Ring wechseln oder auf Reject gehen — darum hier '
+          'je Jahr aufgeschlüsselt.</p>')
+        prev_ids: set = set()
         for y, v in series:
-            bar = "▉" * v if v else "—"
-            w(f'<tr><td>{esc(y)}</td><td><span class="bar">{bar}</span> {esc(v)}</td></tr>')
-        w("</table>")
+            rows_y = now_rows if y == cur_year else contributions(f"{y}-12-31")
+            rows_y = sorted(rows_y, key=lambda r: -r[1])
+            cur_ids = {rid for rid, _, _ in rows_y}
+            if rows_y:
+                contrib = " ".join(
+                    f'<a class="ychip" href="detail-{esc(slug_of(rid))}.html">'
+                    f'{esc(entries.get(rid, {}).get("name"))} <b>+{wgt}</b></a>'
+                    for rid, wgt, _ in rows_y)
+            else:
+                contrib = '<span class="ynone">kein hochrelevanter Eintrag</span>'
+            # Was hat sich gegenüber dem Vorjahr geändert?
+            gone = [entries.get(rid, {}).get("name") for rid in prev_ids - cur_ids]
+            added = [entries.get(rid, {}).get("name") for rid in cur_ids - prev_ids]
+            delta = ""
+            if prev_ids and (gone or added):
+                bits = []
+                if added:
+                    bits.append("neu: " + ", ".join(esc(n) for n in added))
+                if gone:
+                    bits.append("weggefallen: " + ", ".join(esc(n) for n in gone))
+                delta = f'<div class="ydelta">Δ {" · ".join(bits)}</div>'
+            w(f'<div class="yrow"><div class="yhead"><b>{esc(y)}</b> '
+              f'<span class="bar">{"▉" * v if v else "—"}</span> '
+              f'<span class="ysum">Nachfrage {esc(v)}</span></div>'
+              f'<div class="ycontrib">{contrib}</div>{delta}</div>')
+            prev_ids = cur_ids
 
     # 5. Betroffene Einträge + Quellen
     if all_entries:
@@ -304,6 +332,16 @@ def main() -> int:
   th,td{{text-align:left;padding:6px 8px;border-bottom:1px solid #e7e3da}}
   th{{color:#8a867e;font-weight:500}}
   .bar{{color:{GOLD};letter-spacing:1px}}
+  .yrow{{background:#fff;border:1px solid #e7e3da;border-radius:10px;padding:10px 14px;margin:8px 0}}
+  .yhead{{display:flex;align-items:baseline;gap:8px;font-size:14px}}
+  .ysum{{margin-left:auto;color:#6b6862;font-size:13px;white-space:nowrap}}
+  .ycontrib{{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}}
+  .ychip{{font-size:12.5px;color:{INK};text-decoration:none;background:{PAPER};
+          border:1px solid #eee7db;border-radius:7px;padding:3px 8px}}
+  .ychip:hover{{border-color:{GOLD};color:{GOLD}}}
+  .ychip b{{color:{GOLD};font-weight:600}}
+  .ynone{{font-size:12.5px;color:#a8a49b;font-style:italic}}
+  .ydelta{{margin-top:6px;font-size:12px;color:#8a867e}}
   .note{{font-size:12px;color:#8a867e;margin:24px 0 0}}
 </style></head><body><div class="wrap">
 <a class="back" href="index.html">← zum Radar</a>
