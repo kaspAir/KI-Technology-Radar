@@ -87,6 +87,28 @@ def build_user(pat: dict, entry_name: str, belege: list[dict]) -> str:
     )
 
 
+SYNTH_SYSTEM = (
+    "Du bist der Synthese-Assistent eines KI-Technology-Radars. Du ENTWIRFST nur "
+    "(E4). Verdichte die vorgelegten FALLWEISEN Begründungen zu EINER "
+    "Zusammenfassung für das Muster — ausschliesslich aus diesen Begründungen, "
+    "nichts erfinden (E13). Nenne, was die Fälle GEMEINSAM zeigen, und den "
+    "gemeinsamen Frühindikator. Nüchternes Deutsch (Schweizer Rechtschreibung, "
+    "'ss' statt 'ß'). Antworte AUSSCHLIESSLICH mit einem JSON-Objekt."
+)
+
+
+def build_synth_user(pat: dict, cases: list[tuple]) -> str:
+    body = "\n\n".join(f"Fall „{n}“: {b}" for n, b in cases)
+    return (
+        f"Muster: {pat.get('label')}\nKern: {pat.get('kern')}\n"
+        f"Frühindikator: {pat.get('fruehindikator')}\n\n"
+        f"Fallweise Begründungen ({len(cases)}):\n{body}\n\n"
+        "Aufgabe: Gib JSON:\n"
+        '{"zusammenfassung": "3–5 Sätze, was die Fälle GEMEINSAM zeigen (aus den '
+        'Begründungen verdichtet), inklusive gemeinsamem Frühindikator"}'
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Belegbasierte Begründungen je historischem Vergleich entwerfen.")
     ap.add_argument("--instance", required=True)
@@ -177,12 +199,53 @@ def main() -> int:
         if changed and not args.dry_run:
             af.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
+    # Phase 2: pro Muster EINE Synthese aus den (jetzt geschriebenen) Fall-Begründungen.
+    n_synth = 0
+    if not args.dry_run:
+        cases: dict[str, list] = {}
+        for d in sorted((inst / "entries").glob("*/")):
+            af, ef = d / "assessments.yaml", d / "entry.yaml"
+            if not (af.exists() and ef.exists()):
+                continue
+            asl = load_yaml(af).get("assessments", [])
+            if not asl:
+                continue
+            latest = sorted(asl, key=lambda a: a.get("valid_from", ""))[-1]
+            name = load_yaml(ef).get("name", d.name)
+            for h in (latest.get("historical_analogies") or []):
+                if h.get("pattern") in patterns and h.get("begruendung"):
+                    cases.setdefault(h["pattern"], []).append((name, h["begruendung"]))
+        syntheses = []
+        for pid, cs in cases.items():
+            if args.max_cost_usd and cost >= args.max_cost_usd:
+                print("Kosten-Deckel — keine weitere Synthese."); break
+            try:
+                text, usage = call_anthropic(args.model, SYNTH_SYSTEM, build_synth_user(patterns[pid], cs), 700)
+                z = extract_json(text).get("zusammenfassung", "").strip()
+            except Exception as e:
+                print(f"  !! Synthese {pid}: {e}"); continue
+            to = usage.get("output_tokens", 0)
+            tok_out += to
+            cost += (usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0)) / 1e6 * args.price_in + to / 1e6 * args.price_out
+            if z:
+                syntheses.append({"pattern": pid, "zusammenfassung": z})
+                n_synth += 1
+                print(f"  Synthese OK {pid} (aus {len(cs)} Fällen)")
+        if syntheses:
+            sf = inst / "muster" / "synthese.yaml"
+            sf.parent.mkdir(parents=True, exist_ok=True)
+            sf.write_text(yaml.safe_dump({"syntheses": syntheses}, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            mx += 1
+            new_events.append({"id": f"evt.rat-{mx:04d}", "at": now, "actor": f"ki:{args.model}",
+                               "verb": "assessment.enriched", "subject_id": "muster.synthese",
+                               "payload": {"field": "zusammenfassung", "count": n_synth}})
+
     if new_events and not args.dry_run:
         with elog.open("a", encoding="utf-8") as fh:
             for e in new_events:
                 fh.write(json.dumps(e, ensure_ascii=False) + "\n")
 
-    print(f"\n{n_ok} Begründungen entworfen · ~{tok_out} Output-Tokens · ~${cost:.2f}"
+    print(f"\n{n_ok} Begründungen + {n_synth} Muster-Synthesen entworfen · ~{tok_out} Output-Tokens · ~${cost:.2f}"
           + (" (dry-run, nichts geschrieben)" if args.dry_run else ""))
     return 0
 

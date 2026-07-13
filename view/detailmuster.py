@@ -81,6 +81,16 @@ def main() -> int:
     if not pat:
         sys.exit(f"Muster nicht gefunden: {pid}")
 
+    # Instanz-Synthese: EINE Zusammenfassung je Muster, verdichtet aus den
+    # fallweisen Begründungen der Einträge (E13/E4). Optional.
+    synth = ""
+    sf = inst / "muster" / "synthese.yaml"
+    if sf.exists():
+        for s in (load_yaml(sf) or {}).get("syntheses", []):
+            if s.get("pattern") == pid:
+                synth = s.get("zusammenfassung", "")
+                break
+
     entries = {e["id"]: e for e in collect(inst / "entries", "entry.yaml", "entries")}
     asses = collect(inst / "entries", "assessments.yaml", "assessments")
     by_entry: dict[str, list] = {}
@@ -118,6 +128,11 @@ def main() -> int:
       f'<p class="kern"><b>Kern:</b> {esc(pat.get("kern"))}</p>'
       f'<p class="frueh"><b>Frühindikator:</b> {esc(pat.get("fruehindikator"))}</p>'
       '</section>')
+
+    # 1b. Muster-Synthese (aus allen Fall-Begründungen verdichtet)
+    if synth:
+        w('<section class="synth"><p class="synthcap">Was die Fälle im Radar gemeinsam zeigen</p>'
+          f'<p>{esc(synth)}</p></section>')
 
     # 2. Wie bildet sich das Muster
     w("<h2>Wie sich das Muster bildet</h2>")
@@ -177,6 +192,9 @@ def main() -> int:
   .begr{{margin:10px 0 0;padding:10px 12px;background:{PAPER};border-radius:8px}}
   .begrcap{{margin:0 0 3px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:{GOLD}}}
   .begr p{{margin:0;color:#3a3833}}
+  .synth{{background:#fff;border:1px solid {GOLD};border-radius:12px;padding:14px 16px;margin-top:10px}}
+  .synthcap{{margin:0 0 5px;font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:{GOLD}}}
+  .synth p:last-child{{margin:0;font-size:15px;line-height:1.6}}
   .usecard{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px;margin:10px 0}}
   .uhead{{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}}
   .uhead a{{font-size:16px;font-weight:600;color:{INK};text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)}}
