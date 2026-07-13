@@ -23,11 +23,3 @@ properties:
     description: "Wofür das Muster ein Frühindikator ist"
     type: string
     minLength: 1
-  herleitung:
-    description: >-
-      Ausführliche Herleitung (Prosa): wie der Radar auf Kern UND Frühindikator
-      kommt — mit den historischen Ankern, aus denen sich die wiederkehrende Form
-      verdichtet, und warum der Frühindikator das verlässliche Frühsignal ist.
-      KI-Entwurf (E4), vom Kurator zu prüfen.
-    type: string
-    minLength: 1

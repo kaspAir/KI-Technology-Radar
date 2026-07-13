@@ -112,16 +112,11 @@ def main() -> int:
     out = []
     w = out.append
 
-    # 1. Definition — Kern + Frühindikator (Schlagzeile) und, wenn vorhanden, die
-    #    ausführliche Herleitung (wie der Radar auf beide kommt).
-    herl = pat.get("herleitung")
-    herl_html = (f'<div class="herlwrap"><p class="herlcap">Wie der Radar auf Kern '
-                 f'und Frühindikator kommt</p><p class="herl">{esc(herl)}</p></div>'
-                 if herl else '')
+    # 1. Definition — Kern + Frühindikator (abstrakt). Die belegbasierte Begründung
+    #    steht unten je Fall (aus den Beobachtungen des jeweiligen Eintrags).
     w('<section class="card">'
       f'<p class="kern"><b>Kern:</b> {esc(pat.get("kern"))}</p>'
       f'<p class="frueh"><b>Frühindikator:</b> {esc(pat.get("fruehindikator"))}</p>'
-      f'{herl_html}'
       '</section>')
 
     # 2. Wie bildet sich das Muster
@@ -149,9 +144,13 @@ def main() -> int:
                         seen.add(s)
                         srcs.append(src_link(s))
             srctxt = (' · <span class="cite">Quellen: ' + ", ".join(srcs) + "</span>") if srcs else ""
+            begr = h.get("begruendung")
+            begr_html = (f'<div class="begr"><p class="begrcap">Begründung aus den Belegen</p>'
+                         f'<p>{esc(begr)}</p></div>') if begr else ''
             w('<div class="usecard">'
               f'<div class="uhead"><a href="detail-{esc(slug_of(rid))}.html">{esc(e.get("name"))}</a>'
               f'<span class="when">Ring {esc(a.get("ring"))} · ab {ch_date(a.get("valid_from"))}</span></div>'
+              f'{begr_html}'
               f'<p><b>Analogie:</b> {esc(h.get("similarity"))}</p>'
               f'<p><b>Was geschah:</b> {esc(h.get("what_happened"))}</p>'
               f'<p><b>Lehre:</b> {esc(h.get("lesson"))}</p>'
@@ -175,9 +174,9 @@ def main() -> int:
   .card{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px;margin-top:6px}}
   .kern{{margin:0}}
   .frueh{{margin:8px 0 0;color:#4a4741}}
-  .herlwrap{{margin:12px 0 0;padding:12px 0 0;border-top:1px solid #eee7db}}
-  .herlcap{{margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:{GOLD}}}
-  .herl{{margin:0;color:#3a3833}}
+  .begr{{margin:10px 0 0;padding:10px 12px;background:{PAPER};border-radius:8px}}
+  .begrcap{{margin:0 0 3px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:{GOLD}}}
+  .begr p{{margin:0;color:#3a3833}}
   .usecard{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px;margin:10px 0}}
   .uhead{{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}}
   .uhead a{{font-size:16px;font-weight:600;color:{INK};text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)}}

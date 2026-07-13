@@ -3,122 +3,46 @@
 # verglichen — jeweils mit Pflicht-Gegenprobe (limit) auf Ebene der Analogie.
 # Startliste, erweiterbar.
 #
-# Felder je Muster:
-#   kern            — der Kern in einem Satz (Schlagzeile)
-#   fruehindikator  — wofür das Muster ein Frühsignal ist (Schlagzeile)
-#   herleitung      — Prosa: wie der Radar auf Kern UND Frühindikator kommt,
-#                     mit den historischen Ankern. KI-Entwurf (E4), zu prüfen.
+# kern/fruehindikator definieren das Muster abstrakt. Die konkrete, BELEGBASIERTE
+# Begründung je Fall steht bei der jeweiligen Analogie im Eintrag (Feld
+# 'begruendung' im Assessment) — aus den Beobachtungen des Eintrags, nicht hier.
 patterns:
   - id: pattern.hype-zyklus
     label: "Hype-Zyklus"
     kern: "Auslöser → Überhöhung → Ernüchterung → Produktivität"
     fruehindikator: "Übertreibung vs. reale Reife"
-    herleitung: >-
-      Der Kern stammt aus der immer gleichen Kurve, die sich an Dutzenden
-      Technologien wiederholt hat — vom Web (Dot-com-Boom bis 2000 → Absturz →
-      produktives Web ab ~2004) über Big Data bis zur Blockchain. Auf einen echten
-      Auslöser folgt eine mediale Überhöhung, dann die Ernüchterung, wenn die
-      Realität die Versprechen einholt, und erst danach die stille Produktivphase.
-      Den Frühindikator — die Lücke zwischen Übertreibung und realer Reife — liest
-      der Radar an der Diskrepanz zwischen Demo/Ankündigung und belegtem
-      Produktiveinsatz: je grösser der Abstand, desto näher die Ernüchterung. Für
-      die KI heisst das: nicht auf dem Gipfel investieren, sondern die Reifekurve
-      mitverfolgen und den Einstieg an belegter Produktivität festmachen.
+
   - id: pattern.plattform-verschiebung
     label: "Plattform-Verschiebung"
     kern: "Mainframe → PC → Web → Mobile → Agenten?"
     fruehindikator: "Wer die Plattform besitzt, gewinnt"
-    herleitung: >-
-      Der Kern verdichtet mehrere belegte Plattformwechsel: Mainframe → PC (1980er),
-      PC → Web (1990er), Web → Mobile (ab 2007 mit dem iPhone). Jedes Mal verschob
-      sich die Wertschöpfung zu dem, der die neue Plattform kontrollierte
-      (IBM → Microsoft → Apple/Google). Den Frühindikator — Plattform-Besitz —
-      erkennt der Radar daran, wer die Schnittstelle, den Store oder das
-      Standard-Protokoll setzt, über das andere bauen müssen. Die offene Frage
-      „Agenten?" markiert bewusst, dass die nächste Verschiebung möglich, aber noch
-      nicht entschieden ist — darum steht sie mit Fragezeichen und nicht als
-      Prognose.
+
   - id: pattern.kommoditisierung
     label: "Kommoditisierung"
     kern: "Teures/Spezielles wird billig/Standard"
     fruehindikator: "Kippende Geschäftsmodelle"
-    herleitung: >-
-      Der Kern zeigt sich überall dort, wo eine anfangs teure Spezialleistung zur
-      Massenware wurde: Rechenzeit (Mainframe-Stunden → Cloud-Cent), Speicher,
-      Bandbreite, zuletzt die Bilderzeugung. Der Preisverfall verläuft selten
-      linear, sondern kippt, sobald ein offener oder stark skalierter Anbieter die
-      Marge zerstört. Den Frühindikator — kippende Geschäftsmodelle — liest der
-      Radar daran, dass etablierte Anbieter plötzlich um Differenzierung ringen,
-      während der Basispreis gegen null geht. Für die KI unmittelbar relevant, weil
-      sinkende Inferenzkosten und Open-Weight-Modelle genau diese Bewegung antreiben.
+
   - id: pattern.framework-konsolidierung
     label: "Framework-Konsolidierung"
     kern: "Viele Frameworks → wenige Gewinner"
     fruehindikator: "Verfrühte Festlegung meiden"
-    herleitung: >-
-      Der Kern stammt aus wiederkehrenden „Tool-Kriegen": JavaScript-Frameworks
-      (Dutzende → React/Vue), Deep-Learning-Bibliotheken (Caffe/Theano/… →
-      PyTorch/TensorFlow), Container-Orchestrierung (viele Ansätze → Kubernetes).
-      Auf eine Phase wilder Vielfalt folgt regelmässig die Konsolidierung auf zwei
-      oder drei Gewinner. Der Frühindikator warnt vor verfrühter Festlegung: Wer
-      sich im Vielfalts-Stadium fest an einen Kandidaten bindet, trägt das
-      Migrationsrisiko, falls dieser verliert. Der Radar rät darum in frühen Phasen
-      zu Abstraktion und Austauschbarkeit statt zu tiefer Kopplung — und im
-      KI-Werkzeug-Feld (Agenten-Frameworks, Orchestrierung) ist genau dieses
-      Stadium gerade sichtbar.
+
   - id: pattern.abstraktions-sprung
     label: "Abstraktions-Sprung"
     kern: "Assembler → Hochsprache → Framework → Sprache?"
     fruehindikator: "Entwertete Spezialkenntnis"
-    herleitung: >-
-      Der Kern verfolgt, wie die Programmierebene immer weiter vom Maschinen-Detail
-      wegrückt: Maschinencode → Assembler → Hochsprache → Framework → (natürliche
-      Sprache?). Jeder Sprung machte eine vorher wertvolle Spezialkenntnis alltäglich
-      oder überflüssig — die Handoptimierung von Assembler etwa übernahm der Compiler.
-      Den Frühindikator — entwertete Spezialkenntnis — erkennt der Radar daran, dass
-      eine bisher knappe, gut bezahlte Fähigkeit plötzlich per Werkzeug breit
-      zugänglich wird. Für die KI die Kernfrage: Welche heutigen Expertenaufgaben
-      hebt das nächste Abstraktionsniveau auf — und welche werden dadurch erst
-      wichtig (Prüfung, Kuratierung, Urteil)?
+
   - id: pattern.regulatorische-nachlaufwelle
     label: "Regulatorische Nachlaufwelle"
     kern: "Technik zuerst, Recht später (Internet → DSGVO, KI → AI Act)"
     fruehindikator: "Compliance-Bedarf"
-    herleitung: >-
-      Der Kern verallgemeinert ein belegtes Nachlaufmuster: Eine Technik verbreitet
-      sich Jahre vor ihrer Regulierung, dann zieht das Recht nach (Internet → DSGVO
-      2018; Plattformen → Digital Services Act; KI → EU AI Act 2024). Die Welle kommt
-      verlässlich, nur zeitversetzt. Den Frühindikator — aufkommenden
-      Compliance-Bedarf — liest der Radar an ersten Leitplanken: Konsultationen,
-      Selbstverpflichtungen, Gerichtsurteile und Behörden-Guidance, die dem Gesetz
-      vorausgehen. Für ein öffentliches Kompetenzzentrum besonders wichtig, weil
-      frühe Positionierung fast immer günstiger ist als spätes Nachrüsten unter
-      Zeitdruck.
+
   - id: pattern.open-closed-pendel
     label: "Open-vs-Closed-Pendel"
     kern: "Offen ↔ geschlossen im Wechsel"
     fruehindikator: "Abhängigkeitsrisiko"
-    herleitung: >-
-      Der Kern beschreibt ein Pendel, das die IT-Geschichte mehrfach durchlaufen hat:
-      proprietäre Systeme (Mainframe) → offen (PC, Linux, offenes Web) → wieder
-      geschlossener (App-Stores, Cloud-Lock-in) → offene Gegenbewegung. Kein Pol ist
-      stabil; die Vorteile der einen Seite erzeugen den Druck zurück zur anderen. Den
-      Frühindikator — Abhängigkeitsrisiko — erkennt der Radar daran, wie leicht ein
-      Anbieterwechsel noch möglich ist (Datenexport, offene Formate, Zweitquellen).
-      Bei der KI schlägt das Pendel gerade zwischen geschlossenen Frontier-APIs und
-      Open-Weight-Modellen aus — mit direkten Folgen für Datenresidenz und
-      Souveränität, gerade im öffentlichen Sektor.
+
   - id: pattern.erwartungs-enttaeuschung
     label: "Erwartungs-Enttäuschung"
     kern: 'Frühere „intelligente" Systeme enttäuschten'
     fruehindikator: 'Warnung vor „diesmal anders"'
-    herleitung: >-
-      Der Kern speist sich aus den „KI-Wintern": Symbolische KI und Expertensysteme
-      der 1980er weckten grosse Erwartungen und enttäuschten, als sie an Sprödigkeit
-      und Skalierung scheiterten — Förderung und Vertrauen brachen ein. Dieses Muster
-      ist die bewusste Gegenstimme zum Hype-Zyklus: Es mahnt, dass „intelligente"
-      Versprechen historisch oft überzogen waren. Den Frühindikator — den Satz
-      „diesmal ist alles anders" — nimmt der Radar ausdrücklich als Warnsignal, nicht
-      als Beleg. Seine Aufgabe ist die Pflicht-Gegenprobe: Was spricht dagegen, dass
-      die aktuelle Welle wieder an einer harten Grenze bricht — Verlässlichkeit,
-      Kosten, Recht?

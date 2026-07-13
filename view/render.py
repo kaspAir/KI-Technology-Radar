@@ -313,9 +313,12 @@ def main() -> int:
             for h in (a.get("historical_analogies") or []):
                 pl = esc(pattern_label.get(h.get("pattern"), h.get("pattern")))
                 mslug = str(h.get("pattern", "")).split(".", 1)[-1]
+                kurz = h.get("begruendung_kurz")
+                kurz_html = f'<div class="mkurz">{esc(kurz)}</div>' if kurz else ''
                 rows.append(
                     f'<a class="mrow" href="detailmuster-{esc(mslug)}.html">'
                     f'<div class="mhead"><b>{esc(e.get("name"))}</b> ~ {pl} <span class="arrow">→</span></div>'
+                    f'{kurz_html}'
                     f'<div class="mlimit">Grenze: {esc(h.get("limit"))}</div></a>')
         if rows:
             muster = ('<h2>Historische Muster (Vergleich mit Gegenprobe)</h2>'
@@ -514,7 +517,8 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
   a.mrow:hover{{border-color:{GOLD}}}
   .mhead{{font-size:14px}}
   .arrow{{color:{GOLD};float:right}}
-  .mlimit{{font-size:13px;color:#6b6862;margin-top:3px;line-height:1.5}}
+  .mkurz{{font-size:13.5px;color:#3a3833;margin-top:5px;line-height:1.5}}
+  .mlimit{{font-size:13px;color:#6b6862;margin-top:5px;line-height:1.5}}
   .ksub{{font-size:13px;font-weight:400;color:#8a867e}}
   .komp{{display:flex;flex-direction:column;gap:8px}}
   .krow{{display:flex;justify-content:space-between;align-items:baseline;background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:10px 16px;text-decoration:none;color:inherit;transition:border-color .12s}}

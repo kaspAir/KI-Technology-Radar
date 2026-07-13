@@ -146,6 +146,9 @@ def main() -> int:
     # Historischer Vergleich
     for h in latest.get("historical_analogies", []) if latest else []:
         w(f'<h2>Historischer Vergleich — {esc(pat_label.get(h.get("pattern"), h.get("pattern")))}</h2>')
+        if h.get("begruendung"):
+            w('<div class="begr"><p class="begrcap">Begründung aus den Belegen</p>'
+              f'<p>{esc(h.get("begruendung"))}</p></div>')
         w(f'<p>{esc(h.get("similarity"))} {esc(h.get("what_happened"))}</p>')
         w(f'<p><b>Lehre:</b> {esc(h.get("lesson"))}</p>')
         w(f'<p class="limit"><b>Grenze des Vergleichs:</b> {esc(h.get("limit"))}</p>')
@@ -216,6 +219,9 @@ def main() -> int:
   .cite a:hover{{border-color:{GOLD}}}
   .beleg{{white-space:nowrap;font-weight:500;border-bottom:none!important}}
   .limit{{background:#fff;border-left:3px solid {GOLD};padding:8px 12px;border-radius:4px}}
+  .begr{{background:#fff;border:1px solid #e7e3da;border-radius:8px;padding:10px 14px;margin:6px 0 10px}}
+  .begrcap{{margin:0 0 3px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:{GOLD}}}
+  .begr p{{margin:0}}
   .obs{{background:#fff;border:1px solid #e7e3da;border-radius:10px;padding:12px 14px;margin:8px 0}}
   .obs-h{{display:flex;justify-content:space-between;gap:12px;align-items:baseline}}
   .conf{{font-size:12px;color:#8a867e;white-space:nowrap}}

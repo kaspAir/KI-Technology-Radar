@@ -119,3 +119,14 @@ $defs:
         description: "WO der Vergleich nicht mehr trägt — Pflicht (E13)"
         type: string
         minLength: 1
+      begruendung:
+        description: >-
+          Belegbasierte Begründung (Prosa): wie sich Kern UND Frühindikator des
+          Musters an den KONKRETEN Beobachtungen/Artikeln dieses Eintrags zeigen
+          — nicht aus Allgemeinwissen. KI-Entwurf (E4), vom Kurator zu prüfen.
+        type: string
+        minLength: 1
+      begruendung_kurz:
+        description: "Ein-Satz-Zusammenfassung der Begründung für die Radar-Übersicht."
+        type: string
+        minLength: 1

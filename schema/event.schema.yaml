@@ -25,6 +25,7 @@ properties:
       - observation.linked
       - entry.created
       - assessment.drafted
+      - assessment.enriched
       - assessment.ratified
       - ring.changed
       - term.added
