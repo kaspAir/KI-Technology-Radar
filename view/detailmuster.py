@@ -112,10 +112,16 @@ def main() -> int:
     out = []
     w = out.append
 
-    # 1. Definition
+    # 1. Definition — Kern + Frühindikator (Schlagzeile) und, wenn vorhanden, die
+    #    ausführliche Herleitung (wie der Radar auf beide kommt).
+    herl = pat.get("herleitung")
+    herl_html = (f'<div class="herlwrap"><p class="herlcap">Wie der Radar auf Kern '
+                 f'und Frühindikator kommt</p><p class="herl">{esc(herl)}</p></div>'
+                 if herl else '')
     w('<section class="card">'
       f'<p class="kern"><b>Kern:</b> {esc(pat.get("kern"))}</p>'
       f'<p class="frueh"><b>Frühindikator:</b> {esc(pat.get("fruehindikator"))}</p>'
+      f'{herl_html}'
       '</section>')
 
     # 2. Wie bildet sich das Muster
@@ -169,6 +175,9 @@ def main() -> int:
   .card{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px;margin-top:6px}}
   .kern{{margin:0}}
   .frueh{{margin:8px 0 0;color:#4a4741}}
+  .herlwrap{{margin:12px 0 0;padding:12px 0 0;border-top:1px solid #eee7db}}
+  .herlcap{{margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:{GOLD}}}
+  .herl{{margin:0;color:#3a3833}}
   .usecard{{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px;margin:10px 0}}
   .uhead{{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}}
   .uhead a{{font-size:16px;font-weight:600;color:{INK};text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)}}
