@@ -226,7 +226,7 @@ def main() -> int:
   .meta2 b{{font-size:15px;font-weight:600}}
   .div{{color:{GOLD};font-size:13.5px;margin:10px 0 0}}
   .rat{{margin:10px 0 0;color:#4a4741}}
-  .cite{{font-size:12px;color:#8a867e}}
+  .cite{{font-size:12px;color:#8a867e;overflow-wrap:anywhere;word-break:break-word}}
   .cite a{{color:{GOLD};text-decoration:none;border-bottom:1px solid rgba(192,133,31,.35)}}
   .cite a:hover{{border-color:{GOLD}}}
   .beleg{{white-space:nowrap;font-weight:500;border-bottom:none!important}}

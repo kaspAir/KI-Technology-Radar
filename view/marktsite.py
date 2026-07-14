@@ -148,7 +148,7 @@ def main() -> int:
   .ihead{{display:flex;align-items:baseline;gap:8px}}
   .iname{{font-size:15px;font-weight:600}}
   .itext{{font-size:13.5px;line-height:1.55;color:#3a3833;margin:5px 0 4px}}
-  .cite{{font-size:12px;color:#8a867e}}
+  .cite{{font-size:12px;color:#8a867e;overflow-wrap:anywhere;word-break:break-word}}
   .cite a,.fsig a,.fexp a{{color:{GOLD};text-decoration:none;border-bottom:1px solid rgba(192,133,31,.35)}}
   .fexp a{{border-bottom:1px dotted #b3afa6;color:inherit}}
   .fexp a:hover,.cite a:hover{{color:{GOLD}}}

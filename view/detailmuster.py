@@ -201,7 +201,7 @@ def main() -> int:
   .uhead a:hover{{color:{GOLD}}}
   .when{{font-size:12px;color:#8a867e;white-space:nowrap}}
   .limit{{background:{PAPER};border-left:3px solid {GOLD};padding:8px 12px;border-radius:4px}}
-  .cite,.src{{font-size:12px;color:#8a867e}}
+  .cite,.src{{font-size:12px;color:#8a867e;overflow-wrap:anywhere;word-break:break-word}}
   .cite a,.src a{{color:{GOLD};text-decoration:none;border-bottom:1px solid rgba(192,133,31,.35)}}
   .note{{font-size:12px;color:#8a867e;margin:24px 0 0}}
 </style></head><body><div class="wrap">

@@ -172,7 +172,7 @@ def main() -> int:
   .sum{{font-size:14px;line-height:1.55;margin:0 0 8px}}
   .meta{{font-size:13px;color:#4a4741;margin:0 0 4px}}
   .newbr{{color:{GOLD}}}
-  .cite{{font-size:12px;color:#8a867e;margin:0}}
+  .cite{{font-size:12px;color:#8a867e;margin:0;overflow-wrap:anywhere;word-break:break-word}}
   .cite a{{color:{GOLD};text-decoration:none;border-bottom:1px solid rgba(192,133,31,.35)}}
   .empty{{color:#6b6862;font-size:14px}}
   .note{{font-size:12px;color:#8a867e;margin:22px 0 0}}

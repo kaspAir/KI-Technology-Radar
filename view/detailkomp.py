@@ -339,7 +339,7 @@ def main() -> int:
   .of{{font-size:14px;color:#6b6862}}
   .rat{{margin:8px 0 0;color:#4a4741}}
   .div{{color:{GOLD};font-size:13.5px;margin:10px 0 0}}
-  .cite{{font-size:12px;color:#8a867e;margin-top:10px}}
+  .cite{{font-size:12px;color:#8a867e;margin-top:10px;overflow-wrap:anywhere;word-break:break-word}}
   .cite a{{color:{GOLD};text-decoration:none;border-bottom:1px solid rgba(192,133,31,.35)}}
   .verdict{{background:#fff;border-left:3px solid {GOLD};border-radius:6px;padding:10px 14px}}
   .vicon{{font-size:16px}}
