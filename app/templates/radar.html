@@ -29,7 +29,7 @@
 <h1>Mein Radar</h1>
 <p class="sub">Deine Sicht — {{ n }} Einträge{% if n_ref %} ({{ n_ref }} aus dem geerbten Referenz-Grundstock ab 2017, {{ n_own }} eigene){% endif %}. Grundstock zentral gepflegt; eigene Aufnahmen aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a>.</p>
 
-{% if n == 0 %}
+{% if n == 0 and not hidden_blips %}
   <div class="card"><p class="sum">Noch leer — es ist auch kein Referenz-Grundstock hinterlegt. Der Plattform-Admin liest ihn unter <b>Mandanten</b> einmalig ein; danach nimmst du aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> Eigenes dazu.</p></div>
 {% else %}
   <div class="viewtoggle">
@@ -43,27 +43,61 @@
     {% set group = by_ring.get(r) %}
     {% if group %}
     <div class="ringhead">{{ r }} <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ group|length }}</span></div>
-    {% for p, ring, origin in group %}
+    {% for d in group %}{% set p = d.prop %}
     <article class="card">
       <div class="row">
         <div class="grow">
           <div>{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}
-            {% if origin != 'own' %}<span class="chip" style="border-color:var(--gold);color:var(--gold)">geerbt · Referenz</span>{% endif %}</div>
+            {% if d.origin == 'reference' %}<span class="chip" style="border-color:var(--gold);color:var(--gold)">geerbt · Referenz</span>
+            {% elif d.origin == 'inherited' %}<span class="chip" style="border-color:var(--gold);color:var(--gold)">geerbt · Hauptmandant</span>
+            {% elif d.base_ring %}<span class="chip" style="border-color:#2e7d32;color:#2e7d32">angepasst · Referenz {{ d.base_ring }}</span>
+            {% else %}<span class="chip">eigen</span>{% endif %}</div>
           <div style="font-size:15px;font-weight:600;margin:4px 0 2px">
             {% if p.url and not p.url.startswith('entry:') %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
           {% if p.summary %}<p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>{% endif %}
         </div>
-        {% if can_edit and origin == 'own' %}
-        <form method="post" action="/remove">
-          <input type="hidden" name="proposal_id" value="{{ p.id }}">
-          <button type="submit" class="ghost">entfernen</button>
-        </form>
+        {% if can_edit %}
+        <div style="display:flex;flex-direction:column;gap:6px;white-space:nowrap;align-items:stretch">
+          <form method="post" action="/override" style="display:flex;gap:5px">
+            <input type="hidden" name="proposal_id" value="{{ p.id }}">
+            <select name="ring">{% for r in rings %}<option value="{{ r }}" {{ 'selected' if r==d.ring }}>{{ r }}</option>{% endfor %}</select>
+            <button type="submit">anpassen</button>
+          </form>
+          {% if d.origin != 'own' %}
+          <form method="post" action="/override">
+            <input type="hidden" name="proposal_id" value="{{ p.id }}"><input type="hidden" name="ring" value="—">
+            <button type="submit" class="ghost">ausblenden</button>
+          </form>
+          {% elif d.base_ring %}
+          <form method="post" action="/remove">
+            <input type="hidden" name="proposal_id" value="{{ p.id }}">
+            <button type="submit" class="ghost">auf Referenz zurücksetzen</button>
+          </form>
+          {% else %}
+          <form method="post" action="/remove">
+            <input type="hidden" name="proposal_id" value="{{ p.id }}">
+            <button type="submit" class="ghost">entfernen</button>
+          </form>
+          {% endif %}
+        </div>
         {% endif %}
       </div>
     </article>
     {% endfor %}
     {% endif %}
   {% endfor %}
+
+  {% if can_edit and hidden_blips %}
+  <div class="ringhead">Ausgeblendet <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ hidden_blips|length }}</span></div>
+  <p class="muted" style="margin:0 0 8px">Geerbte Blips, die du für deinen Mandanten ausgeblendet hast. Wieder einblenden = zurück zur Referenz.</p>
+  {% for p in hidden_blips %}
+  <article class="card"><div class="row">
+    <div class="grow" style="color:#8a867e">{{ p.title }}</div>
+    <form method="post" action="/remove"><input type="hidden" name="proposal_id" value="{{ p.id }}">
+      <button type="submit" class="ghost">wieder einblenden</button></form>
+  </div></article>
+  {% endfor %}
+  {% endif %}
 {% endif %}
 {% if n > 0 %}
 <script>

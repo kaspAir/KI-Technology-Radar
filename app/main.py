@@ -122,26 +122,36 @@ def reference_tenant_id(db):
 def effective_curation(db, tenant_id):
     """Effektive Kuratierung eines Mandanten = Referenz-Grundstock ⊕ Eltern-Kette ⊕
     eigene Wertung. Nähere Schicht überschreibt per proposal_id; Ring '—' blendet aus.
-    Rückgabe: Liste (Proposal, ring, origin) mit origin in reference|inherited|own."""
-    layers = []  # (origin, tenant_id), von entfernt nach nah
+    Rückgabe: Liste von dicts {prop, ring, origin, base_ring, has_own}:
+      origin    reference|inherited|own (nächstliegende Quelle des sichtbaren Rings)
+      base_ring geerbter Ring OHNE eigene Wertung (None = rein eigener Blip)
+      has_own   True, wenn eine eigene Wertung (Override/Ausblenden/Aufnahme) existiert."""
     ref = reference_tenant_id(db)
-    if ref and ref != tenant_id:
-        layers.append(("reference", ref))
-    chain = tenant_chain(db, tenant_id)          # Wurzel .. self
-    for t in chain[:-1]:                          # Eltern (ohne self)
-        layers.append(("inherited", t.id))
-    layers.append(("own", tenant_id))
-    merged = {}                                   # proposal_id -> (ring, origin)
-    for origin, tid in layers:
+    chain = tenant_chain(db, tenant_id)                       # Wurzel .. self
+    base_layers = ([ref] if ref and ref != tenant_id else []) + [t.id for t in chain[:-1]]
+    base = {}                                                 # pid -> (ring, origin)
+    for tid in base_layers:
+        origin = "reference" if tid == ref else "inherited"
         for cur in db.scalars(select(Curation).where(Curation.tenant_id == tid)):
-            merged[cur.proposal_id] = (cur.ring, origin)
-    pids = [pid for pid, (ring, _) in merged.items() if ring != HIDDEN]
+            base[cur.proposal_id] = (cur.ring, origin)
+    own = {cur.proposal_id: cur.ring
+           for cur in db.scalars(select(Curation).where(Curation.tenant_id == tenant_id))}
+    pids = set(base) | set(own)
     props = {p.id: p for p in db.scalars(select(Proposal).where(Proposal.id.in_(pids)))} if pids else {}
     out = []
-    for pid, (ring, origin) in merged.items():
+    for pid in pids:
         p = props.get(pid)
-        if p and ring != HIDDEN:
-            out.append((p, ring, origin))
+        if not p:
+            continue
+        base_ring = base.get(pid, (None, None))[0]
+        if pid in own:
+            ring, origin = own[pid], "own"
+        else:
+            ring, origin = base[pid]
+        if ring == HIDDEN:
+            continue
+        out.append({"prop": p, "ring": ring, "origin": origin,
+                    "base_ring": base_ring, "has_own": pid in own})
     return out
 
 
@@ -335,7 +345,7 @@ def proposals(request: Request, b: str = "", user=Depends(current_user), db=Depe
         return RedirectResponse("/login", 302)
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
-    mine = {p.id for p, _r, _o in effective_curation(db, user.tenant_id)}
+    mine = {d["prop"].id for d in effective_curation(db, user.tenant_id)}
     rows = db.scalars(select(Proposal).order_by(Proposal.relevance_general.desc(), Proposal.id.desc())).all()
     open_rows = [p for p in rows if p.id not in mine and (not b or b in p.branchen.split())]
     branchen = sorted({x for p in rows if p.id not in mine for x in p.branchen.split() if x})
@@ -368,6 +378,25 @@ def remove(request: Request, proposal_id: int = Form(...), user=Depends(current_
     return RedirectResponse("/radar", 303)
 
 
+@app.post("/override")
+def override(request: Request, proposal_id: int = Form(...), ring: str = Form(...),
+            user=Depends(current_user), db=Depends(db_session)):
+    """Eigene Wertung eines Blips setzen/ändern: ring in RINGS = anpassen (überschreibt
+    geerbte Referenz), ring == '—' = geerbten Blip ausblenden."""
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/radar", 303)
+    if ring not in RINGS and ring != HIDDEN:
+        return RedirectResponse("/radar", 303)
+    c = db.scalar(select(Curation).where(Curation.tenant_id == user.tenant_id,
+                                         Curation.proposal_id == proposal_id))
+    if c:
+        c.ring = ring
+    else:
+        db.add(Curation(tenant_id=user.tenant_id, proposal_id=proposal_id, ring=ring))
+    db.commit()
+    return RedirectResponse("/radar", 303)
+
+
 def _sectors_and_areamap():
     core = BASE.parent
     areas = []
@@ -394,22 +423,26 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
         return RedirectResponse("/login", 302)
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
-    eff = effective_curation(db, user.tenant_id)      # (Proposal, ring, origin)
+    eff = effective_curation(db, user.tenant_id)      # dicts {prop,ring,origin,base_ring,has_own}
     by_ring = {r: [] for r in RINGS}
-    for prop, ring, origin in eff:
-        by_ring.setdefault(ring, []).append((prop, ring, origin))
+    for d in eff:
+        by_ring.setdefault(d["ring"], []).append(d)
     sectors, amap = _sectors_and_areamap()
     sector_ids = [s["id"] for s in sectors]
     fallback = sector_ids[0] if sector_ids else "area.x"
     themes = []
-    for prop, ring, origin in eff:
+    for d in eff:
+        prop = d["prop"]
         sec = amap.get(prop.suggested_entry or "", "") or fallback
         if sec not in sector_ids:
             sec = fallback
-        themes.append({"id": str(prop.id), "name": prop.title, "ring": ring,
+        themes.append({"id": str(prop.id), "name": prop.title, "ring": d["ring"],
                        "sector": sec, "href": "#", "dom": prop.branchen or ""})
-    n_own = sum(1 for _p, _r, o in eff if o == "own")
-    n_ref = sum(1 for _p, _r, o in eff if o != "own")
+    n_own = sum(1 for d in eff if d["origin"] == "own")
+    n_ref = sum(1 for d in eff if d["origin"] != "own")
+    hidden_blips = [db.get(Proposal, c.proposal_id) for c in db.scalars(
+        select(Curation).where(Curation.tenant_id == user.tenant_id, Curation.ring == HIDDEN))]
+    hidden_blips = [p for p in hidden_blips if p]
     import sys as _sys
     if str(CORE_VIEW) not in _sys.path:
         _sys.path.insert(0, str(CORE_VIEW))
@@ -419,7 +452,7 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
         RADAR_JS = ""
     return templates.TemplateResponse(request, "radar.html", {
         **_nav(user, db), "active": "radar", "by_ring": by_ring, "rings": RINGS, "n": len(eff),
-        "n_own": n_own, "n_ref": n_ref,
+        "n_own": n_own, "n_ref": n_ref, "hidden_blips": hidden_blips,
         "themes_json": json.dumps(themes, ensure_ascii=False),
         "sectors_json": json.dumps(sectors, ensure_ascii=False), "radar_js": RADAR_JS})
 
