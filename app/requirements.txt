@@ -5,4 +5,7 @@ jinja2
 itsdangerous
 python-multipart
 pyyaml
-# Produktion (MariaDB): zusätzlich pymysql  (RADAR_DB=mysql+pymysql://user:pw@host/db)
+# Produktion (Server):
+gunicorn
+# Produktion (MariaDB): RADAR_DB=mysql+pymysql://user:pw@host:3306/db?charset=utf8mb4
+pymysql

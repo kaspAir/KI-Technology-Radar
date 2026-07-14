@@ -1,0 +1,5 @@
+# Shell-Skripte laufen auf dem Linux-Host — immer LF (CRLF bricht die Shebang).
+*.sh text eol=lf
+deploy/docroot/.htaccess text eol=lf
+# PowerShell bleibt Windows-seitig.
+*.ps1 text eol=crlf

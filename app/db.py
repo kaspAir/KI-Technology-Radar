@@ -23,7 +23,10 @@ from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column,
 
 DATABASE_URL = os.environ.get("RADAR_DB", "sqlite:///./radar.db")
 _connect = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, future=True, connect_args=_connect)
+# pool_pre_ping: MariaDB/MySQL trennt inaktive Verbindungen -> vor Gebrauch prüfen
+# (verhindert „server has gone away" im Dauerbetrieb). Bei SQLite unschädlich.
+engine = create_engine(DATABASE_URL, future=True, connect_args=_connect,
+                       pool_pre_ping=not DATABASE_URL.startswith("sqlite"))
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
 
 ROLES = ["admin", "member", "viewer"]
