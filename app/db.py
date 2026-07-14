@@ -93,6 +93,22 @@ class Curation(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "proposal_id", name="uq_tenant_prop"),)
 
 
+class CurationEvent(Base):
+    """Ereignis-Historie der Wertung (E21): ein Mandant setzte einen Blip zum Datum
+    'at' auf 'ring'. Stand as-of eines Datums = jüngstes Event mit at<=Datum je
+    (tenant, proposal). ring in RINGS = sichtbar; '—' = ausgeblendet; '' = entfernt.
+    Für den Grundstock aus assessments.yaml importiert (historische valid_from-Daten);
+    für eigene Wertungen bei jeder Aktion (add/override/remove) mitgeschrieben."""
+    __tablename__ = "curation_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("proposals.id"), index=True)
+    ring: Mapped[str] = mapped_column(String(20), default="")
+    at: Mapped[str] = mapped_column(String(20), index=True)   # YYYY-MM-DD
+    actor: Mapped[str] = mapped_column(String(80), default="mensch:mvp")
+    created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class Profile(Base):
     """Mandanten-Profil (E24, pro Mandant). data = JSON der Profil-Felder."""
     __tablename__ = "profiles"

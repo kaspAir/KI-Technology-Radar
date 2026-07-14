@@ -10,6 +10,7 @@ Umgebung: RADAR_DB, RADAR_SECRET, RADAR_INSTANCE, RADAR_ADMIN_EMAIL/PW (Bootstra
 """
 from __future__ import annotations
 
+import datetime as _dt
 import html as _html
 import json
 import os
@@ -26,8 +27,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
-from .db import (Curation, Profile, Proposal, ROLES, SessionLocal, Tenant, User,
-                 init_db)
+from .db import (Curation, CurationEvent, Profile, Proposal, ROLES, SessionLocal,
+                 Tenant, User, init_db)
 from .security import hash_pw, verify_pw
 
 RINGS = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
@@ -130,6 +131,59 @@ def effective_profile(db, tenant_id) -> dict:
 
 def reference_tenant_id(db):
     return db.scalar(select(Tenant.id).where(Tenant.is_reference == True))  # noqa: E712
+
+
+def _asof_ring_by_layer(db, tenant_id, as_of):
+    """{proposal_id -> ring} für EINE Mandanten-Ebene: jüngstes Event mit at<=as_of."""
+    rows = db.execute(
+        select(CurationEvent.proposal_id, CurationEvent.ring)
+        .where(CurationEvent.tenant_id == tenant_id, CurationEvent.at <= as_of)
+        .order_by(CurationEvent.at, CurationEvent.id)).all()
+    latest = {}
+    for pid, ring in rows:      # aufsteigend sortiert -> letzte Zuweisung je pid gewinnt
+        latest[pid] = ring
+    return latest
+
+
+def effective_curation_asof(db, tenant_id, as_of):
+    """Wie effective_curation, aber Stand zum Datum as_of (aus der Ereignis-Historie)."""
+    ref = reference_tenant_id(db)
+    chain = tenant_chain(db, tenant_id)
+    base_layers = ([ref] if ref and ref != tenant_id else []) + [t.id for t in chain[:-1]]
+    base = {}
+    for tid in base_layers:
+        origin = "reference" if tid == ref else "inherited"
+        for pid, ring in _asof_ring_by_layer(db, tid, as_of).items():
+            base[pid] = (ring, origin)
+    own = _asof_ring_by_layer(db, tenant_id, as_of)
+    pids = set(base) | set(own)
+    props = {p.id: p for p in db.scalars(select(Proposal).where(Proposal.id.in_(pids)))} if pids else {}
+    out = []
+    for pid in pids:
+        p = props.get(pid)
+        if not p:
+            continue
+        base_ring = base.get(pid, (None, None))[0]
+        ring, origin = (own[pid], "own") if pid in own else base[pid]
+        if ring not in RINGS:      # '' (entfernt) oder '—' (ausgeblendet) -> unsichtbar
+            continue
+        out.append({"prop": p, "ring": ring, "origin": origin,
+                    "base_ring": base_ring, "has_own": pid in own})
+    return out
+
+
+def available_years(db, tenant_id):
+    """Jahre mit Historie über Referenz + Eltern + eigene (für den Zeitpunkt-Wähler)."""
+    ref = reference_tenant_id(db)
+    tids = ([ref] if ref else []) + [t.id for t in tenant_chain(db, tenant_id)]
+    ats = db.scalars(select(CurationEvent.at).where(CurationEvent.tenant_id.in_(tids))).all()
+    return sorted({a[:4] for a in ats if a}, reverse=True)
+
+
+def _log_curation_event(db, tenant_id, proposal_id, ring):
+    """Eigene Wertungs-Änderung in die Historie schreiben (ring, '' = entfernt, '—' = aus)."""
+    db.add(CurationEvent(tenant_id=tenant_id, proposal_id=proposal_id, ring=ring,
+                         at=_dt.date.today().isoformat(), actor="mensch:mvp"))
 
 
 def effective_curation(db, tenant_id):
@@ -438,7 +492,9 @@ def add(request: Request, proposal_id: int = Form(...), ring: str = Form("Watch"
     if ring not in RINGS:
         ring = "Watch"
     if not db.scalar(select(Curation).where(Curation.tenant_id == user.tenant_id, Curation.proposal_id == proposal_id)):
-        db.add(Curation(tenant_id=user.tenant_id, proposal_id=proposal_id, ring=ring)); db.commit()
+        db.add(Curation(tenant_id=user.tenant_id, proposal_id=proposal_id, ring=ring))
+        _log_curation_event(db, user.tenant_id, proposal_id, ring)
+        db.commit()
     return RedirectResponse(target, 303)
 
 
@@ -450,7 +506,9 @@ def remove(request: Request, proposal_id: int = Form(...), user=Depends(current_
     c = db.scalar(select(Curation).where(Curation.tenant_id == user.tenant_id,
                                          Curation.proposal_id == proposal_id))
     if c:
-        db.delete(c); db.commit()
+        db.delete(c)
+        _log_curation_event(db, user.tenant_id, proposal_id, "")   # entfernt
+        db.commit()
     return RedirectResponse("/radar", 303)
 
 
@@ -469,6 +527,7 @@ def override(request: Request, proposal_id: int = Form(...), ring: str = Form(..
         c.ring = ring
     else:
         db.add(Curation(tenant_id=user.tenant_id, proposal_id=proposal_id, ring=ring))
+    _log_curation_event(db, user.tenant_id, proposal_id, ring)
     db.commit()
     return RedirectResponse("/radar", 303)
 
@@ -510,12 +569,15 @@ PLABEL = {"openai": "OpenAI", "anthropic": "Anthropic", "google": "Google",
 
 
 @app.get("/radar", response_class=HTMLResponse)
-def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
+def radar(request: Request, as_of: str = "", user=Depends(current_user), db=Depends(db_session)):
     if not user:
         return RedirectResponse("/login", 302)
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
-    eff = effective_curation(db, user.tenant_id)      # dicts {prop,ring,origin,base_ring,has_own}
+    years = available_years(db, user.tenant_id)
+    historical = bool(as_of)
+    eff = (effective_curation_asof(db, user.tenant_id, as_of) if historical
+           else effective_curation(db, user.tenant_id))   # dicts {prop,ring,origin,base_ring,has_own}
     by_ring = {r: [] for r in RINGS}
     for d in eff:
         by_ring.setdefault(d["ring"], []).append(d)
@@ -556,7 +618,8 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     return templates.TemplateResponse(request, "radar.html", {
         **_nav(user, db), "active": "radar", "by_ring": by_ring, "rings": RINGS, "n": len(eff),
         "n_own": n_own, "n_ref": n_ref, "hidden_blips": hidden_blips,
-        "branches": branches, "provs": provs,
+        "branches": branches, "provs": provs, "years": years, "as_of": as_of,
+        "historical": historical,
         "themes_json": json.dumps(themes, ensure_ascii=False),
         "sectors_json": json.dumps(sectors, ensure_ascii=False), "radar_js": RADAR_JS})
 

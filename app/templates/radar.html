@@ -37,8 +37,15 @@
 {% if n == 0 and not hidden_blips %}
   <div class="card"><p class="sum">Noch leer — es ist auch kein Referenz-Grundstock hinterlegt. Der Plattform-Admin liest ihn unter <b>Mandanten</b> einmalig ein; danach nimmst du aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> Eigenes dazu.</p></div>
 {% else %}
-  {% if branches or provs %}
+  {% if branches or provs or years %}
   <div class="radctl">
+    {% if years %}
+    <label>Zeitpunkt
+      <select onchange="location=this.value">
+        <option value="/radar" {{ 'selected' if not historical }}>aktuell</option>
+        {% for y in years %}<option value="/radar?as_of={{ y }}-12-31" {{ 'selected' if as_of.startswith(y) }}>{{ y }}</option>{% endfor %}
+      </select></label>
+    {% endif %}
     {% if branches %}
     <label>Branche
       <select id="bran" onchange="branf()">
@@ -54,6 +61,9 @@
       </select></label>
     {% endif %}
   </div>
+  {% endif %}
+  {% if historical %}
+  <div class="card" style="border-left:3px solid var(--gold)">Historischer Stand — <b>{{ as_of[:4] }}</b> (rekonstruiert aus der Wertungs-Historie). Nur-Lese-Ansicht; wähle „aktuell" zum Bearbeiten.</div>
   {% endif %}
   <div class="viewtoggle">
     <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
@@ -79,7 +89,7 @@
             {% if p.url and not p.url.startswith('entry:') %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
           {% if p.summary %}<p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>{% endif %}
         </div>
-        {% if can_edit %}
+        {% if can_edit and not historical %}
         <div style="display:flex;flex-direction:column;gap:6px;white-space:nowrap;align-items:stretch">
           <form method="post" action="/override" style="display:flex;gap:5px">
             <input type="hidden" name="proposal_id" value="{{ p.id }}">
@@ -110,7 +120,7 @@
     {% endif %}
   {% endfor %}
 
-  {% if can_edit and hidden_blips %}
+  {% if can_edit and hidden_blips and not historical %}
   <div class="ringhead">Ausgeblendet <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ hidden_blips|length }}</span></div>
   <p class="muted" style="margin:0 0 8px">Geerbte Blips, die du für deinen Mandanten ausgeblendet hast. Wieder einblenden = zurück zur Referenz.</p>
   {% for p in hidden_blips %}
