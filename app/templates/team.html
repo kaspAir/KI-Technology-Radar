@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% set active='team' %}{% block title %}Team — KI-Radar{% endblock %}
+{% block body %}
+<h1>Team &amp; Untermandanten</h1>
+<p class="sub">Nutzer deiner Organisation <b>{{ tenant.name }}</b> verwalten und
+Untermandanten (z.B. Abteilungen) anlegen. Untermandanten haben ihre eigene
+Instanz und erben deine Profil-Vorgaben.</p>
+{% if request.query_params.get('ok') %}<div class="card" style="border-left:3px solid #2e7d32">✓ Gespeichert.</div>{% endif %}
+{% if request.query_params.get('err') %}<div class="err">Bitte prüfen (E-Mail eindeutig, Passwort ≥ 8).</div>{% endif %}
+
+<h2 style="font-size:16px;color:var(--gold);margin:20px 0 6px">Nutzer ({{ tenant.name }})</h2>
+{% for m in members %}
+  <div class="card"><div class="row">
+    <div class="grow"><b>{{ m.email }}</b> <span class="chip">{{ m.role }}</span></div>
+    {% if m.id != user.id %}
+    <form method="post" action="/team/user/remove"><input type="hidden" name="user_id" value="{{ m.id }}">
+      <button class="ghost" type="submit">entfernen</button></form>
+    {% else %}<span class="muted">du</span>{% endif %}
+  </div></div>
+{% endfor %}
+
+{% for s in subs %}
+  <h2 style="font-size:15px;color:var(--gold);margin:18px 0 4px">↳ {{ s.name }} <span class="muted" style="font-weight:400">(Untermandant)</span></h2>
+  {% for m in submembers.get(s.id, []) %}
+    <div class="card" style="margin-left:16px"><div class="row">
+      <div class="grow"><b>{{ m.email }}</b> <span class="chip">{{ m.role }}</span></div>
+      <form method="post" action="/team/user/remove"><input type="hidden" name="user_id" value="{{ m.id }}">
+        <button class="ghost" type="submit">entfernen</button></form>
+    </div></div>
+  {% else %}
+    <p class="muted" style="margin-left:16px">Noch keine Nutzer.</p>
+  {% endfor %}
+{% endfor %}
+
+<h2 style="font-size:16px;color:var(--gold);margin:22px 0 6px">Nutzer anlegen</h2>
+<form method="post" action="/team/user" class="card">
+  <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+    <div class="grow"><label class="muted">E-Mail</label><input name="email" style="width:100%;box-sizing:border-box" placeholder="person@org.ch"></div>
+    <div><label class="muted">Rolle</label><br><select name="role">{% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}</select></div>
+    <div><label class="muted">Mandant</label><br><select name="tenant_id"><option value="{{ tenant.id }}">{{ tenant.name }}</option>{% for s in subs %}<option value="{{ s.id }}">↳ {{ s.name }}</option>{% endfor %}</select></div>
+    <div class="grow"><label class="muted">Initial-Passwort (≥ 8)</label><input name="pw" type="text" style="width:100%;box-sizing:border-box"></div>
+    <div><button type="submit">Anlegen</button></div>
+  </div>
+</form>
+
+<h2 style="font-size:16px;color:var(--gold);margin:22px 0 6px">Untermandant anlegen</h2>
+<form method="post" action="/team/subtenant" class="card">
+  <div class="row" style="gap:10px;align-items:flex-end">
+    <div class="grow"><label class="muted">Name (z.B. Abteilung)</label><input name="name" style="width:100%;box-sizing:border-box" placeholder="z.B. Abteilung IT"></div>
+    <div><button type="submit">Anlegen</button></div>
+  </div>
+  <p class="muted" style="margin-top:8px">Danach kannst du oben Nutzer für den Untermandanten anlegen.</p>
+</form>
+{% endblock %}

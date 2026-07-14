@@ -1,31 +1,46 @@
-"""db.py — Datenmodell des Selbstbedienungs-Radars (MVP).
+"""db.py — Datenmodell des Selbstbedienungs-Radars (MVP, mandantenfähig).
 
-Zwei Schichten (siehe docs/selbstbedienungs-radar-design.md):
-- Proposal = geteilter Pool (Belege/Vorschläge), einmal für alle.
-- Curation = private Wertung je Nutzer/Mandant (welcher Vorschlag auf MEIN Radar,
-  welcher Ring). E25: die private Kuratierung ist pro user_id getrennt.
+Hierarchie (A2):
+- Tenant = Mandant/Organisation, als BAUM (parent_id): Haupt-Mandant -> Untermandanten
+  (z.B. Abteilungen). Jeder Mandant hat SEINE eigene Kuratierung + Profil (Instanz).
+- User = gehört zu genau einem Mandanten, mit Rolle admin|member|viewer.
+  is_platform_admin = Plattform-Betreiber (du), über allen Mandanten (tenant_id NULL).
+- Curation/Profile hängen am MANDANTEN (tenant_id), nicht am Einzelnutzer -> alle
+  Nutzer einer Org arbeiten am gemeinsamen Radar (E25: pro Mandant getrennt).
+- Proposal = geteilter Pool (für alle Mandanten gleich).
 
-SQLite fürs Bauen; für Produktion RADAR_DB auf MariaDB setzen
-(z.B. mysql+pymysql://user:pw@host/db).
+SQLite fürs Bauen; Produktion: RADAR_DB auf MariaDB.
 """
 from __future__ import annotations
 
 import datetime as _dt
 import os
 
-from sqlalchemy import (DateTime, ForeignKey, Integer, String, Text,
+from sqlalchemy import (Boolean, DateTime, ForeignKey, Integer, String, Text,
                         UniqueConstraint, create_engine, func)
 from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column,
-                            sessionmaker)
+                            relationship, sessionmaker)
 
 DATABASE_URL = os.environ.get("RADAR_DB", "sqlite:///./radar.db")
 _connect = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, future=True, connect_args=_connect)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
 
+ROLES = ["admin", "member", "viewer"]
+
 
 class Base(DeclarativeBase):
     pass
+
+
+class Tenant(Base):
+    """Mandant/Organisation. parent_id=NULL -> oberster Mandant; sonst Untermandant."""
+    __tablename__ = "tenants"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    children = relationship("Tenant", backref="parent", remote_side=[id])
 
 
 class User(Base):
@@ -33,6 +48,9 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     pw: Mapped[str] = mapped_column(String(255))
+    tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(20), default="member")   # admin|member|viewer
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -45,29 +63,27 @@ class Proposal(Base):
     summary: Mapped[str] = mapped_column(Text, default="")
     citation: Mapped[str] = mapped_column(Text, default="")
     source_id: Mapped[str] = mapped_column(String(80), default="")
-    branchen: Mapped[str] = mapped_column(String(300), default="")   # space-getrennte domain-Slugs
+    branchen: Mapped[str] = mapped_column(String(300), default="")
     suggested_entry: Mapped[str] = mapped_column(String(200), default="")
     relevance_general: Mapped[int] = mapped_column(Integer, default=0)
     date_published: Mapped[str] = mapped_column(String(20), default="")
 
 
 class Curation(Base):
-    """Private Wertung: dieser Nutzer nimmt diesen Vorschlag auf seinen Radar (Ring)."""
+    """Private Wertung eines MANDANTEN: dieser Vorschlag auf sein Radar (Ring)."""
     __tablename__ = "curations"
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
     proposal_id: Mapped[int] = mapped_column(ForeignKey("proposals.id"), index=True)
     ring: Mapped[str] = mapped_column(String(20), default="Watch")
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
-    __table_args__ = (UniqueConstraint("user_id", "proposal_id", name="uq_user_prop"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "proposal_id", name="uq_tenant_prop"),)
 
 
 class Profile(Base):
-    """Mandanten-Profil (E24 Konfiguration, tenant-privat, 1:1 zum Nutzer/Mandant).
-    `data` = JSON der Profil-Felder (schwerpunkte, risikofreudigkeit, kpis, …).
-    Direkt-Speichern über /profil — steuert das Lagebild pro Mandant."""
+    """Mandanten-Profil (E24, pro Mandant). data = JSON der Profil-Felder."""
     __tablename__ = "profiles"
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
     data: Mapped[str] = mapped_column(Text, default="{}")
     updated: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

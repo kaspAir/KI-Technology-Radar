@@ -34,10 +34,17 @@
 {% if user %}
 <header><span class="brand">Aletheia · Radar</span>
 <nav>
-  <a href="/proposals" class="{{ 'active' if active=='proposals' }}">Vorschläge</a>
-  <a href="/radar" class="{{ 'active' if active=='radar' }}">Mein Radar</a>
-  <a href="/profil" class="{{ 'active' if active=='profil' }}">Profil</a>
-  <a href="/lagebild">Lagebild</a>
+  {% if user.is_platform_admin %}
+    <a href="/admin" class="{{ 'active' if active=='admin' }}">Mandanten</a>
+    <span class="muted">Plattform-Admin</span>
+  {% else %}
+    <a href="/proposals" class="{{ 'active' if active=='proposals' }}">Vorschläge</a>
+    <a href="/radar" class="{{ 'active' if active=='radar' }}">Mein Radar</a>
+    <a href="/profil" class="{{ 'active' if active=='profil' }}">Profil</a>
+    <a href="/lagebild">Lagebild</a>
+    {% if can_manage %}<a href="/team" class="{{ 'active' if active=='team' }}">Team</a>{% endif %}
+    {% if tenant %}<span class="muted">{{ tenant.name }} · {{ user.role }}</span>{% endif %}
+  {% endif %}
   <span class="muted">{{ user.email }}</span>
   <a href="/logout">Abmelden</a>
 </nav></header>

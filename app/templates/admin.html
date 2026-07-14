@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% set active='admin' %}{% block title %}Mandanten — KI-Radar{% endblock %}
+{% block body %}
+<h1>Mandanten</h1>
+<p class="sub">Plattform-Verwaltung: Organisationen (Mandanten) anlegen. Jeder Mandant
+erhält einen ersten <b>Admin</b>, der dann eigene Nutzer und Untermandanten anlegt.</p>
+{% if request.query_params.get('ok') %}<div class="card" style="border-left:3px solid #2e7d32">✓ Mandant angelegt.</div>{% endif %}
+{% if request.query_params.get('err') %}<div class="err">Bitte prüfen: Name nötig, E-Mail eindeutig, Passwort ≥ 8 Zeichen.</div>{% endif %}
+
+<h2 style="font-size:16px;color:var(--gold);margin:20px 0 6px">Bestehende Mandanten</h2>
+{% set tops = tenants|selectattr('parent_id','none')|list %}
+{% if not tops %}<p class="muted">Noch keine Mandanten.</p>{% endif %}
+{% for t in tops %}
+  <div class="card">
+    <b>{{ t.name }}</b> <span class="muted">· {{ ucount.get(t.id,0) }} Nutzer</span>
+    {% set kids = tenants|selectattr('parent_id','equalto',t.id)|list %}
+    {% for k in kids %}
+      <div style="margin:5px 0 0 18px">↳ {{ k.name }} <span class="muted">· {{ ucount.get(k.id,0) }} Nutzer</span></div>
+    {% endfor %}
+  </div>
+{% endfor %}
+
+<h2 style="font-size:16px;color:var(--gold);margin:22px 0 6px">Neuen Mandanten anlegen</h2>
+<form method="post" action="/admin/tenant" class="card">
+  <label class="muted">Name der Organisation</label>
+  <input name="name" style="width:100%;box-sizing:border-box" placeholder="z.B. Firma X">
+  <label class="muted" style="margin-top:10px;display:block">Erster Admin — E-Mail</label>
+  <input name="admin_email" style="width:100%;box-sizing:border-box" placeholder="admin@firma-x.ch">
+  <label class="muted" style="margin-top:10px;display:block">Erster Admin — Initial-Passwort (≥ 8, dem Admin mitteilen)</label>
+  <input name="admin_pw" type="text" style="width:100%;box-sizing:border-box" placeholder="temporäres Passwort">
+  <div style="margin-top:12px"><button type="submit">Mandant anlegen</button></div>
+</form>
+{% endblock %}

@@ -26,11 +26,13 @@
       <p class="sum">{{ p.summary[:280] }}{% if p.summary|length > 280 %}…{% endif %}</p>
       <p class="muted">{{ p.citation[:130] }}{% if p.url %} · <a class="art" href="{{ p.url }}" target="_blank" rel="noopener">Artikel ↗</a>{% endif %}</p>
     </div>
+    {% if can_edit %}
     <form method="post" action="/add" style="display:flex;flex-direction:column;gap:6px;white-space:nowrap">
       <input type="hidden" name="proposal_id" value="{{ p.id }}">
       <select name="ring">{% for r in rings %}<option value="{{ r }}" {{ 'selected' if r=='Watch' }}>{{ r }}</option>{% endfor %}</select>
       <button type="submit">auf mein Radar</button>
     </form>
+    {% endif %}
   </div>
 </article>
 {% endfor %}

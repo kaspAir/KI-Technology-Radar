@@ -6,6 +6,8 @@
 Lagebild und die Empfehlungen. Privat, pro Mandant (E25). <b>Direkt gespeichert</b> —
 kein Download, kein Commit.</p>
 {% if saved %}<div class="card" style="border-left:3px solid #2e7d32">✓ Profil gespeichert.</div>{% endif %}
+{% if parent %}<div class="card" style="border-left:3px solid var(--gold)">Erbt strategische Vorgaben von <b>{{ parent.name }}</b>. Leere Felder übernehmen dessen Werte automatisch (unten als „Vorgabe“ angezeigt).</div>{% endif %}
+{% if not can_edit %}<div class="err">Nur-Lese-Zugriff (Rolle „viewer“). Änderungen kann ein Admin/Mitglied vornehmen.</div>{% endif %}
 <form method="post" action="/profil">
   {% for key,label,typ,opt in fields %}
     {% if key=='§' %}
@@ -14,24 +16,27 @@ kein Download, kein Commit.</p>
       <div style="margin:9px 0">
         <label class="muted" for="p_{{key}}">{{ label }}</label><br>
         {% if typ=='select' %}
-          <select id="p_{{key}}" name="{{ key }}">
+          <select id="p_{{key}}" name="{{ key }}" {{ 'disabled' if not can_edit }}>
             <option value=""></option>
             {% for o in opt %}<option {{ 'selected' if vals[key]==o }}>{{ o }}</option>{% endfor %}
           </select>
         {% elif typ=='textarea' %}
-          <textarea id="p_{{key}}" name="{{ key }}" rows="2"
+          <textarea id="p_{{key}}" name="{{ key }}" rows="2" {{ 'disabled' if not can_edit }}
             style="width:100%;box-sizing:border-box;border:1px solid #e7e3da;border-radius:8px;padding:6px 9px;font:inherit">{{ vals[key] }}</textarea>
         {% else %}
-          <input id="p_{{key}}" name="{{ key }}" value="{{ vals[key] }}"
+          <input id="p_{{key}}" name="{{ key }}" value="{{ vals[key] }}" {{ 'disabled' if not can_edit }}
             {% if typ=='list' %}placeholder="Komma-getrennt"{% endif %}
             style="width:100%;box-sizing:border-box">
         {% endif %}
+        {% if inherited.get(key) %}<div class="muted" style="margin-top:3px">Vorgabe {{ parent.name }}: {{ inherited[key] }}</div>{% endif %}
       </div>
     {% endif %}
   {% endfor %}
+  {% if can_edit %}
   <div style="position:sticky;bottom:0;background:var(--paper);padding:14px 0;border-top:1px solid #e7e3da;margin-top:14px">
     <button type="submit">Profil speichern</button>
     <span class="muted" style="margin-left:10px">Wirkt sofort auf dein Lagebild.</span>
   </div>
+  {% endif %}
 </form>
 {% endblock %}

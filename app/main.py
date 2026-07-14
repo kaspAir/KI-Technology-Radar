@@ -1,14 +1,19 @@
-"""main.py — Selbstbedienungs-Radar (MVP): Login → Vorschläge → mein Radar.
+"""main.py — Selbstbedienungs-Radar (MVP, mandantenfähig).
+
+Hierarchie: Plattform-Admin -> Mandanten (Baum) -> Nutzer (Rolle admin|member|viewer).
+Curation/Profile hängen am Mandanten (geteilt). Untermandanten erben das Profil des
+Eltern-Mandanten als Vorgabe (effective_profile).
 
 Start (Entwicklung):
-  uvicorn app.main:app --reload
-Umgebung: RADAR_DB (Default sqlite:///./radar.db), RADAR_SECRET (Session-Schlüssel).
+  RADAR_ADMIN_EMAIL=du@x.ch RADAR_ADMIN_PW=... uvicorn app.main:app --reload
+Umgebung: RADAR_DB, RADAR_SECRET, RADAR_INSTANCE, RADAR_ADMIN_EMAIL/PW (Bootstrap).
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import secrets
 from pathlib import Path
 
 import yaml
@@ -18,12 +23,18 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
-from .db import Curation, Profile, Proposal, SessionLocal, User, init_db
+from .db import (Curation, Profile, Proposal, ROLES, SessionLocal, Tenant, User,
+                 init_db)
 from .security import hash_pw, verify_pw
 
 RINGS = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
+BASE = Path(__file__).resolve().parent
+CORE_VIEW = BASE.parent / "view"
+INSTANCE = Path(os.environ.get("RADAR_INSTANCE", str(BASE.parent.parent / "KI-Technology-Radar-Instanz")))
+app = FastAPI(title="KI-Radar — Selbstbedienung")
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("RADAR_SECRET", "dev-only-change-me"))
+templates = Jinja2Templates(directory=str(BASE / "templates"))
 
-# Mandanten-Profil-Felder (E24). typ: text | textarea | select | list. "§" = Abschnitt.
 PROFILE_FIELDS = [
     ("§", "Identität & Mandat", None, None),
     ("name", "Name der Organisation", "text", None),
@@ -49,17 +60,18 @@ PROFILE_FIELDS = [
     ("staerken", "Vorhandene Stärken", "list", None),
     ("kompetenz_luecken", "Kompetenz-Lücken / Aufbau-Ziele", "list", None),
 ]
-BASE = Path(__file__).resolve().parent
-CORE_VIEW = BASE.parent / "view"   # für die wiederverwendbare Lagebild-Logik
-INSTANCE = Path(os.environ.get("RADAR_INSTANCE", str(BASE.parent.parent / "KI-Technology-Radar-Instanz")))
-app = FastAPI(title="KI-Radar — Selbstbedienung")
-app.add_middleware(SessionMiddleware, secret_key=os.environ.get("RADAR_SECRET", "dev-only-change-me"))
-templates = Jinja2Templates(directory=str(BASE / "templates"))
 
 
 @app.on_event("startup")
 def _startup():
     init_db()
+    email = (os.environ.get("RADAR_ADMIN_EMAIL") or "").strip().lower()
+    pw = os.environ.get("RADAR_ADMIN_PW") or ""
+    if email and pw:
+        with SessionLocal() as s:
+            if not s.scalar(select(User).where(User.email == email)):
+                s.add(User(email=email, pw=hash_pw(pw), is_platform_admin=True, tenant_id=None, role="admin"))
+                s.commit()
 
 
 def db_session():
@@ -72,30 +84,66 @@ def current_user(request: Request, db=Depends(db_session)):
     return db.get(User, uid) if uid else None
 
 
+def can_edit(u) -> bool:
+    return bool(u and (u.is_platform_admin or u.role in ("admin", "member")))
+
+
+def can_manage(u) -> bool:
+    return bool(u and (u.is_platform_admin or u.role == "admin"))
+
+
+def tenant_chain(db, tenant_id):
+    """Kette Wurzel -> ... -> tenant_id (Liste von Tenant-Objekten)."""
+    chain, t = [], db.get(Tenant, tenant_id)
+    while t:
+        chain.append(t)
+        t = db.get(Tenant, t.parent_id) if t.parent_id else None
+    chain.reverse()
+    return chain
+
+
+def effective_profile(db, tenant_id) -> dict:
+    """Effektives Profil = Eltern-Vorgaben (Wurzel zuerst) mit eigenem überschrieben."""
+    merged: dict = {}
+    for t in tenant_chain(db, tenant_id):
+        p = db.get(Profile, t.id)
+        if p and p.data:
+            for k, v in (json.loads(p.data) or {}).items():
+                if v not in (None, "", [], {}):
+                    merged[k] = v
+    return merged
+
+
 # --- Auth -------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def root(request: Request, user=Depends(current_user)):
-    return RedirectResponse("/radar" if user else "/login", 302)
+    if not user:
+        return RedirectResponse("/login", 302)
+    return RedirectResponse("/admin" if user.is_platform_admin else "/radar", 302)
 
 
 @app.get("/signup", response_class=HTMLResponse)
-def signup_form(request: Request):
+def signup_form(request: Request, db=Depends(db_session)):
+    # Offene Registrierung nur für den allerersten Nutzer (= Plattform-Admin).
+    if db.scalar(select(User.id).limit(1)):
+        return templates.TemplateResponse(request, "login.html",
+            {"err": "Registrierung geschlossen — dein Administrator legt dich an."}, status_code=403)
     return templates.TemplateResponse(request, "signup.html", {"err": None})
 
 
 @app.post("/signup")
 def signup(request: Request, email: str = Form(...), pw: str = Form(...), db=Depends(db_session)):
+    if db.scalar(select(User.id).limit(1)):
+        return templates.TemplateResponse(request, "login.html",
+            {"err": "Registrierung geschlossen."}, status_code=403)
     email = email.strip().lower()
     if not email or len(pw) < 8:
         return templates.TemplateResponse(request, "signup.html",
             {"err": "E-Mail nötig, Passwort mind. 8 Zeichen."}, status_code=400)
-    if db.scalar(select(User).where(User.email == email)):
-        return templates.TemplateResponse(request, "signup.html",
-            {"err": "E-Mail ist schon registriert."}, status_code=400)
-    u = User(email=email, pw=hash_pw(pw))
+    u = User(email=email, pw=hash_pw(pw), is_platform_admin=True, tenant_id=None, role="admin")
     db.add(u); db.commit()
     request.session["uid"] = u.id
-    return RedirectResponse("/proposals", 302)
+    return RedirectResponse("/admin", 302)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -110,7 +158,7 @@ def login(request: Request, email: str = Form(...), pw: str = Form(...), db=Depe
         return templates.TemplateResponse(request, "login.html",
             {"err": "E-Mail oder Passwort falsch."}, status_code=401)
     request.session["uid"] = u.id
-    return RedirectResponse("/radar", 302)
+    return RedirectResponse("/admin" if u.is_platform_admin else "/radar", 302)
 
 
 @app.get("/logout")
@@ -119,46 +167,140 @@ def logout(request: Request):
     return RedirectResponse("/login", 302)
 
 
-# --- Vorschläge (geteilter Pool) + mein Radar -------------------------------
+def _nav(user, db):
+    """Kontext für die Navigation (Rolle/Mandant)."""
+    tenant = db.get(Tenant, user.tenant_id) if user and user.tenant_id else None
+    return {"user": user, "tenant": tenant, "can_edit": can_edit(user), "can_manage": can_manage(user)}
+
+
+# --- Plattform-Admin: Mandanten verwalten -----------------------------------
+@app.get("/admin", response_class=HTMLResponse)
+def admin(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.is_platform_admin:
+        return RedirectResponse("/radar", 302)
+    tenants = db.scalars(select(Tenant).order_by(Tenant.parent_id.is_(None).desc(), Tenant.name)).all()
+    users = db.scalars(select(User)).all()
+    ucount = {}
+    for u in users:
+        ucount[u.tenant_id] = ucount.get(u.tenant_id, 0) + 1
+    return templates.TemplateResponse(request, "admin.html",
+        {**_nav(user, db), "active": "admin", "tenants": tenants, "ucount": ucount})
+
+
+@app.post("/admin/tenant")
+def admin_create_tenant(request: Request, name: str = Form(...), admin_email: str = Form(...),
+                        admin_pw: str = Form(...), user=Depends(current_user), db=Depends(db_session)):
+    if not user or not user.is_platform_admin:
+        return RedirectResponse("/login", 302)
+    name = name.strip()
+    admin_email = admin_email.strip().lower()
+    if not name or not admin_email or len(admin_pw) < 8:
+        return RedirectResponse("/admin?err=1", 303)
+    if db.scalar(select(User).where(User.email == admin_email)):
+        return RedirectResponse("/admin?err=mail", 303)
+    t = Tenant(name=name, parent_id=None)
+    db.add(t); db.flush()
+    db.add(User(email=admin_email, pw=hash_pw(admin_pw), tenant_id=t.id, role="admin"))
+    db.commit()
+    return RedirectResponse("/admin?ok=1", 303)
+
+
+# --- Mandanten-Admin: Team + Untermandanten ---------------------------------
+@app.get("/team", response_class=HTMLResponse)
+def team(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.tenant_id or not can_manage(user):
+        return RedirectResponse("/radar", 302)
+    members = db.scalars(select(User).where(User.tenant_id == user.tenant_id).order_by(User.email)).all()
+    subs = db.scalars(select(Tenant).where(Tenant.parent_id == user.tenant_id).order_by(Tenant.name)).all()
+    submembers = {s.id: db.scalars(select(User).where(User.tenant_id == s.id)).all() for s in subs}
+    return templates.TemplateResponse(request, "team.html",
+        {**_nav(user, db), "active": "team", "members": members, "subs": subs,
+         "submembers": submembers, "roles": ROLES})
+
+
+@app.post("/team/user")
+def team_add_user(request: Request, email: str = Form(...), role: str = Form("member"),
+                  pw: str = Form(...), tenant_id: int = Form(None),
+                  user=Depends(current_user), db=Depends(db_session)):
+    if not user or not can_manage(user):
+        return RedirectResponse("/login", 302)
+    # in eigenen Mandanten oder einen eigenen Untermandanten
+    tid = tenant_id or user.tenant_id
+    allowed = {user.tenant_id} | {s.id for s in db.scalars(select(Tenant).where(Tenant.parent_id == user.tenant_id))}
+    if tid not in allowed or role not in ROLES or len(pw) < 8:
+        return RedirectResponse("/team?err=1", 303)
+    email = email.strip().lower()
+    if not email or db.scalar(select(User).where(User.email == email)):
+        return RedirectResponse("/team?err=mail", 303)
+    db.add(User(email=email, pw=hash_pw(pw), tenant_id=tid, role=role))
+    db.commit()
+    return RedirectResponse("/team?ok=1", 303)
+
+
+@app.post("/team/subtenant")
+def team_add_sub(request: Request, name: str = Form(...), user=Depends(current_user), db=Depends(db_session)):
+    if not user or not can_manage(user) or not user.tenant_id:
+        return RedirectResponse("/login", 302)
+    name = name.strip()
+    if name:
+        db.add(Tenant(name=name, parent_id=user.tenant_id)); db.commit()
+    return RedirectResponse("/team?ok=sub", 303)
+
+
+@app.post("/team/user/remove")
+def team_remove_user(request: Request, user_id: int = Form(...), user=Depends(current_user), db=Depends(db_session)):
+    if not user or not can_manage(user):
+        return RedirectResponse("/login", 302)
+    target = db.get(User, user_id)
+    allowed = {user.tenant_id} | {s.id for s in db.scalars(select(Tenant).where(Tenant.parent_id == user.tenant_id))}
+    if target and target.id != user.id and target.tenant_id in allowed:
+        db.delete(target); db.commit()
+    return RedirectResponse("/team?ok=rm", 303)
+
+
+# --- Vorschläge (geteilter Pool) + mein Radar (pro Mandant) ------------------
 @app.get("/proposals", response_class=HTMLResponse)
 def proposals(request: Request, b: str = "", user=Depends(current_user), db=Depends(db_session)):
     if not user:
         return RedirectResponse("/login", 302)
-    mine = {c.proposal_id for c in db.scalars(select(Curation).where(Curation.user_id == user.id))}
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    mine = {c.proposal_id for c in db.scalars(select(Curation).where(Curation.tenant_id == user.tenant_id))}
     rows = db.scalars(select(Proposal).order_by(Proposal.relevance_general.desc(), Proposal.id.desc())).all()
     open_rows = [p for p in rows if p.id not in mine and (not b or b in p.branchen.split())]
     branchen = sorted({x for p in rows if p.id not in mine for x in p.branchen.split() if x})
     return templates.TemplateResponse(request, "proposals.html", {
-        "user": user, "rows": open_rows[:200], "branchen": branchen,
-        "sel": b, "rings": RINGS, "total_open": len([p for p in rows if p.id not in mine])})
+        **_nav(user, db), "active": "proposals", "rows": open_rows[:200], "branchen": branchen,
+        "sel": b, "rings": RINGS[:4], "total_open": len([p for p in rows if p.id not in mine])})
 
 
 @app.post("/add")
 def add(request: Request, proposal_id: int = Form(...), ring: str = Form("Watch"),
         user=Depends(current_user), db=Depends(db_session)):
-    if not user:
-        return RedirectResponse("/login", 302)
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/proposals", 303)
     if ring not in RINGS:
         ring = "Watch"
-    if not db.scalar(select(Curation).where(Curation.user_id == user.id, Curation.proposal_id == proposal_id)):
-        db.add(Curation(user_id=user.id, proposal_id=proposal_id, ring=ring)); db.commit()
+    if not db.scalar(select(Curation).where(Curation.tenant_id == user.tenant_id, Curation.proposal_id == proposal_id)):
+        db.add(Curation(tenant_id=user.tenant_id, proposal_id=proposal_id, ring=ring)); db.commit()
     return RedirectResponse("/proposals", 303)
 
 
 @app.post("/remove")
 def remove(request: Request, curation_id: int = Form(...), user=Depends(current_user), db=Depends(db_session)):
-    if not user:
-        return RedirectResponse("/login", 302)
+    if not can_edit(user):
+        return RedirectResponse("/radar", 303)
     c = db.get(Curation, curation_id)
-    if c and c.user_id == user.id:
+    if c and c.tenant_id == user.tenant_id:
         db.delete(c); db.commit()
     return RedirectResponse("/radar", 303)
 
 
 def _sectors_and_areamap():
-    """Sektoren (aus vocab-core-Bereichen) + Karte suggested_entry->Bereich (aus der
-    geteilten Instanz), damit die MVP-Kuratierungen wie im statischen Radar nach
-    Sektor platziert werden können."""
     core = BASE.parent
     areas = []
     af = core / "vocab-core" / "area.yaml"
@@ -182,14 +324,14 @@ def _sectors_and_areamap():
 def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     if not user:
         return RedirectResponse("/login", 302)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
     q = select(Curation, Proposal).join(Proposal, Curation.proposal_id == Proposal.id).where(
-        Curation.user_id == user.id)
+        Curation.tenant_id == user.tenant_id)
     items = list(db.execute(q).all())
     by_ring = {r: [] for r in RINGS}
     for cur, prop in items:
         by_ring.setdefault(cur.ring, []).append((cur, prop))
-
-    # Daten für die Radar-Visualisierung (dieselbe Engine wie der statische Radar).
     sectors, amap = _sectors_and_areamap()
     sector_ids = [s["id"] for s in sectors]
     fallback = sector_ids[0] if sector_ids else "area.x"
@@ -208,32 +350,39 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     except Exception:
         RADAR_JS = ""
     return templates.TemplateResponse(request, "radar.html", {
-        "user": user, "by_ring": by_ring, "rings": RINGS, "n": len(items),
+        **_nav(user, db), "active": "radar", "by_ring": by_ring, "rings": RINGS, "n": len(items),
         "themes_json": json.dumps(themes, ensure_ascii=False),
-        "sectors_json": json.dumps(sectors, ensure_ascii=False),
-        "radar_js": RADAR_JS})
+        "sectors_json": json.dumps(sectors, ensure_ascii=False), "radar_js": RADAR_JS})
 
 
-# --- Mandanten-Profil (E24, tenant-privat, DIREKT gespeichert) ---------------
+# --- Mandanten-Profil (pro Mandant, mit Eltern-Vererbung) --------------------
 @app.get("/profil", response_class=HTMLResponse)
 def profil_form(request: Request, saved: int = 0, user=Depends(current_user), db=Depends(db_session)):
     if not user:
         return RedirectResponse("/login", 302)
-    prof = db.get(Profile, user.id)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    prof = db.get(Profile, user.tenant_id)
     data = json.loads(prof.data) if prof and prof.data else {}
+    parent = db.get(Tenant, db.get(Tenant, user.tenant_id).parent_id) if db.get(Tenant, user.tenant_id).parent_id else None
+    inherited = effective_profile(db, parent.id) if parent else {}
     vals = {}
     for key, label, typ, opt in PROFILE_FIELDS:
         if key == "§":
             continue
         v = data.get(key)
         vals[key] = ", ".join(str(x) for x in v) if isinstance(v, list) else (v or "")
+    inh = {}
+    for k, v in inherited.items():
+        inh[k] = ", ".join(str(x) for x in v) if isinstance(v, list) else str(v)
     return templates.TemplateResponse(request, "profil.html", {
-        "user": user, "active": "profil", "fields": PROFILE_FIELDS, "vals": vals, "saved": bool(saved)})
+        **_nav(user, db), "active": "profil", "fields": PROFILE_FIELDS, "vals": vals,
+        "saved": bool(saved), "inherited": inh, "parent": parent})
 
 
 @app.post("/profil")
 async def save_profil(request: Request, user=Depends(current_user), db=Depends(db_session)):
-    if not user:
+    if not can_edit(user) or not user.tenant_id:
         return RedirectResponse("/login", 302)
     form = await request.form()
     data = {}
@@ -243,34 +392,29 @@ async def save_profil(request: Request, user=Depends(current_user), db=Depends(d
         raw = (form.get(key) or "").strip()
         data[key] = [x.strip() for x in raw.split(",") if x.strip()] if typ == "list" else raw
     payload = json.dumps(data, ensure_ascii=False)
-    prof = db.get(Profile, user.id)
+    prof = db.get(Profile, user.tenant_id)
     if prof:
         prof.data = payload
     else:
-        db.add(Profile(user_id=user.id, data=payload))
+        db.add(Profile(tenant_id=user.tenant_id, data=payload))
     db.commit()
     return RedirectResponse("/profil?saved=1", 303)
 
 
-# --- Lagebild: LIVE aus dem Profil (+ geteilter Radar-Instanz) berechnet ------
+# --- Lagebild: live aus dem EFFEKTIVEN Profil (inkl. Eltern-Vorgaben) --------
 @app.get("/lagebild", response_class=HTMLResponse)
 def lagebild_view(request: Request, user=Depends(current_user), db=Depends(db_session)):
     if not user:
         return RedirectResponse("/login", 302)
-    prof = db.get(Profile, user.id)
-    data = json.loads(prof.data) if prof and prof.data else {}
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    data = effective_profile(db, user.tenant_id)
     import sys as _sys
     if str(CORE_VIEW) not in _sys.path:
         _sys.path.insert(0, str(CORE_VIEW))
     try:
         from lagebild import render_lagebild
-        # Dieselbe WERTEN-Logik wie der statische Build — hier mit dem PROFIL des
-        # eingeloggten Mandanten (aus der DB) statt aus mandant.yaml. So rechnet
-        # das Lagebild live: Profil speichern -> hier sofort neu berechnet.
         html = render_lagebild(INSTANCE, data)
-        # Der Generator erzeugt statische Datei-Links (profil.html, detail-*.html …).
-        # Im MVP gibt es Routen, keine .html-Dateien -> Links umbiegen bzw. (mangels
-        # Detail-Seiten im MVP) neutralisieren, damit nichts ins Leere führt.
         html = (html.replace('href="profil.html"', 'href="/profil"')
                     .replace('href="index.html"', 'href="/radar"')
                     .replace('href="bericht.html"', 'href="/radar"')
@@ -279,6 +423,5 @@ def lagebild_view(request: Request, user=Depends(current_user), db=Depends(db_se
         html = re.sub(r'href="detail[^"]*\.html"', 'href="#" onclick="return false"', html)
     except Exception as e:
         html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
-                f"<p>Lagebild derzeit nicht verfügbar: {e}</p>"
-                "<p><a href='/profil'>← Profil</a></p></div>")
+                f"<p>Lagebild derzeit nicht verfügbar: {e}</p><p><a href='/profil'>← Profil</a></p></div>")
     return HTMLResponse(html)
