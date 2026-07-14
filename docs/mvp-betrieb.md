@@ -134,6 +134,24 @@ Stellschrauben (optional in `.env`): `RADAR_INGEST_MAX_COST` (Deckel $, Default 
 (ausserhalb Git → `~/radar-instance` bleibt für `app-run.sh` sauber). Kosten real
 erfahrungsgemäss ~$0.10–0.30/Nacht (24-h-Fenster = wenige neue Items).
 
+## 11. Monatlicher Markt-Refresh (Entwurf zur Anbieter-Landschaft)
+
+Die `/markt`-Ampel + Indikatoren (`markt/anbieter.yaml`) sind ein **kuratiertes** Urteil
+und werden NICHT automatisch überschrieben (E8: keine erfundenen Finanzzahlen/Tendenzen).
+`deploy/app-marktrefresh.sh` sammelt die Monats-Signale aus dem Pool und **entwirft** je
+Firma „Tendenz + Belege" in eine Review-Datei — der Kurator ratifiziert von Hand.
+
+```sh
+# Test (kostet ~$0.x, Deckel $2):
+bash ~/radar-app/deploy/app-marktrefresh.sh
+cat ~/radar-app/reviews/anbieter-vorschlag-$(date +%Y-%m).md     # Entwurf lesen
+
+# Cron (1. des Monats, 04:00):
+(crontab -l; echo "0 4 1 * * /bin/sh $HOME/radar-app/deploy/app-marktrefresh.sh >> $HOME/radar-app/logs/marktrefresh.log 2>&1") | crontab -
+```
+Danach: `markt/anbieter.yaml` in der Instanz anpassen → Instanz pushen → `app-run.sh`
+(zieht die Instanz) → `/markt` zeigt den neuen Stand. Nichts wird ohne dich verändert.
+
 ## 9. Fehlersuche
 
 - **502 im Browser:** Gunicorn läuft nicht → `tail ~/radar-app/logs/error.log`, `app-run.sh` erneut.

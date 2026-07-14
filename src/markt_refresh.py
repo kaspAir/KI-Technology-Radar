@@ -95,6 +95,8 @@ def main() -> int:
     ap.add_argument("--price-in", type=float, default=1.0)
     ap.add_argument("--price-out", type=float, default=5.0)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--pool", default=None,
+                    help="Pool-Datei mit den frischen Signalen (Default: <instance>/inbox/pool.yaml)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -104,8 +106,8 @@ def main() -> int:
     data = load_yaml(inst / "markt" / "anbieter.yaml") or {}
     firmen = data.get("firmen", [])
 
-    pool = (load_yaml(inst / "inbox" / "pool.yaml") or {}).get("candidates", []) \
-        if (inst / "inbox" / "pool.yaml").exists() else []
+    pool_path = Path(args.pool) if args.pool else inst / "inbox" / "pool.yaml"
+    pool = (load_yaml(pool_path) or {}).get("candidates", []) if pool_path.exists() else []
     # Kandidaten aus dem Markt-/Anbieter-Monitoring (frische Signale).
     MON = {"source.markt-monitoring", "source.anbieter-monitoring", "source.markt-analysen"}
     items = []
