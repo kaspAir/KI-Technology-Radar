@@ -27,3 +27,4 @@ Thumbs.db
 /agents/
 /vocab/
 radar.db
+*.db
