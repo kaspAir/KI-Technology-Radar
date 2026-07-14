@@ -253,6 +253,8 @@ def main() -> int:
     # Link zum Eingangskorb nur intern (Kandidaten sind unratifiziert, E4/E25).
     kandlink = ('' if args.mode == "public"
                 else ' &nbsp;·&nbsp; <a href="kandidaten.html">Eingangskorb — Kandidaten nach Branche →</a>')
+    marktlink = ('' if args.mode == "public"
+                 else ' &nbsp;·&nbsp; <a href="markt.html">KI-Markt & Anbieter (Tendenzen) →</a>')
 
     # Länder-Umschalter (A1): navigiert zwischen den Länder-Radaren (je Land eine Instanz).
     cur_code = (country or {}).get("code")
@@ -585,7 +587,7 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
 {country_sel} {tsel} {bran_sel} {prov_sel}
-<p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}</p>
+<p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}{marktlink}</p>
 <div class="viewtoggle">
 <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
 <button class="vbtn" data-v="columns" onclick="setView('columns')">▤ Sektor-Spalten</button></div>

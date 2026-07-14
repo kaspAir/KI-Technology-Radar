@@ -124,6 +124,11 @@ def main() -> int:
     if args.mode == "internal":
         run("kandidaten.py", "--instance", str(inst), "--out", str(out / "kandidaten.html"))
 
+    # Anbieter-Landschaft + Makro-Indikatoren (markt.html) — nur intern (E25),
+    # und nur wenn die Datenquelle existiert.
+    if args.mode == "internal" and (inst / "markt" / "anbieter.yaml").exists():
+        run("marktsite.py", "--instance", str(inst), "--out", str(out / "markt.html"))
+
     # Detail-Dossier je Eintrag (detail-<slug>.html) — Ziel der Blip-/Karten-Links.
     ids = entry_ids(inst)
     for eid in ids:
