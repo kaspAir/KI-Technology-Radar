@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, Request
@@ -221,6 +222,15 @@ def lagebild_view(request: Request, user=Depends(current_user), db=Depends(db_se
         # eingeloggten Mandanten (aus der DB) statt aus mandant.yaml. So rechnet
         # das Lagebild live: Profil speichern -> hier sofort neu berechnet.
         html = render_lagebild(INSTANCE, data)
+        # Der Generator erzeugt statische Datei-Links (profil.html, detail-*.html …).
+        # Im MVP gibt es Routen, keine .html-Dateien -> Links umbiegen bzw. (mangels
+        # Detail-Seiten im MVP) neutralisieren, damit nichts ins Leere führt.
+        html = (html.replace('href="profil.html"', 'href="/profil"')
+                    .replace('href="index.html"', 'href="/radar"')
+                    .replace('href="bericht.html"', 'href="/radar"')
+                    .replace('href="markt.html"', 'href="/radar"')
+                    .replace('href="kandidaten.html"', 'href="/proposals"'))
+        html = re.sub(r'href="detail[^"]*\.html"', 'href="#" onclick="return false"', html)
     except Exception as e:
         html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
                 f"<p>Lagebild derzeit nicht verfügbar: {e}</p>"
