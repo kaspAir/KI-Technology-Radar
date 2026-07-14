@@ -76,6 +76,10 @@ class Proposal(Base):
     suggested_entry: Mapped[str] = mapped_column(String(200), default="")
     relevance_general: Mapped[int] = mapped_column(Integer, default=0)
     date_published: Mapped[str] = mapped_column(String(20), default="")
+    # Anbieter-Abhängigkeit (Blast-Radius): nur an ratifizierten Grundstock-Blips
+    # gesetzt (aus entry.yaml importiert). providers = space-getrennt.
+    providers: Mapped[str] = mapped_column(Text, default="")
+    provider_dependency: Mapped[str] = mapped_column(Text, default="")
 
 
 class Curation(Base):
@@ -98,29 +102,31 @@ class Profile(Base):
 
 
 def _ensure_columns() -> None:
-    """Leichte Dev-Migration (nur SQLite): fehlende Spalten per ALTER TABLE ergänzen,
-    damit ein Schema-Zuwachs die bestehende radar.db nicht unbrauchbar macht.
-    Produktion (MariaDB) bekommt später echte Migrationen (Alembic)."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
+    """Leichte additive Migration (SQLite + MariaDB): fehlende Spalten per ALTER TABLE
+    ADD COLUMN ergänzen, damit ein Schema-Zuwachs die bestehende DB nicht unbrauchbar
+    macht. Deckt additive Änderungen ab; komplexere Migrationen später via Alembic.
+    Der Spaltentyp wird dialektkorrekt aus dem SQLAlchemy-Typ kompiliert."""
     from sqlalchemy import inspect, text
     insp = inspect(engine)
-    _sqlite_type = {"INTEGER": "INTEGER", "BOOLEAN": "BOOLEAN", "VARCHAR": "VARCHAR",
-                    "TEXT": "TEXT", "DATETIME": "DATETIME"}
     with engine.begin() as conn:
         for table in Base.metadata.sorted_tables:
-            have = {c["name"] for c in insp.get_columns(table.name)} if insp.has_table(table.name) else set()
-            if not have:
+            if not insp.has_table(table.name):
                 continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
             for col in table.columns:
                 if col.name in have:
                     continue
-                ctype = _sqlite_type.get(col.type.__class__.__name__.upper(), "VARCHAR")
-                default = "0" if ctype in ("INTEGER", "BOOLEAN") else ("''" if ctype in ("VARCHAR", "TEXT") else None)
-                ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ctype}'
-                if default is not None:
-                    ddl += f" DEFAULT {default}"
-                conn.execute(text(ddl))
+                coltype = col.type.compile(dialect=engine.dialect)
+                default = ""
+                d = getattr(col.default, "arg", None) if col.default is not None else None
+                if d is not None and not callable(d):
+                    if isinstance(d, bool):
+                        default = f" DEFAULT {1 if d else 0}"
+                    elif isinstance(d, (int, float)):
+                        default = f" DEFAULT {d}"
+                    elif isinstance(d, str):
+                        default = " DEFAULT '{}'".format(d.replace("'", "''"))
+                conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {col.name} {coltype}{default}"))
 
 
 def init_db() -> None:

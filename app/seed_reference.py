@@ -46,18 +46,23 @@ def run(instance_path: str) -> int:
                 continue
             url = f"entry:{eid}"
             branchen = " ".join(d.split(".", 1)[-1] for d in (e.get("domains") or []))
+            providers = " ".join(e.get("providers") or [])
+            dep = str(e.get("provider_dependency") or "")
             p = db.query(Proposal).filter(Proposal.url == url).first()
             if not p:
                 p = Proposal(url=url, title=e.get("name") or eid, summary="",
                              citation="", source_id="referenz",
                              branchen=branchen, suggested_entry=eid,
-                             relevance_general=0, date_published=str(e.get("first_seen") or ""))
+                             relevance_general=0, date_published=str(e.get("first_seen") or ""),
+                             providers=providers, provider_dependency=dep)
                 db.add(p); db.flush(); n_new += 1
             else:
                 p.title = e.get("name") or eid
                 p.branchen = branchen
                 p.suggested_entry = eid
                 p.date_published = str(e.get("first_seen") or "")
+                p.providers = providers
+                p.provider_dependency = dep
             c = db.query(Curation).filter(Curation.tenant_id == ref.id,
                                           Curation.proposal_id == p.id).first()
             if not c:

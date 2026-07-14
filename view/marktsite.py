@@ -48,15 +48,9 @@ def esc(s) -> str:
     return html.escape(str(s if s is not None else ""))
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Anbieter-Landschaft + Makro-Indikatoren (markt.html).")
-    ap.add_argument("--instance", required=True)
-    ap.add_argument("--out", required=True)
-    args = ap.parse_args()
-    inst = Path(args.instance)
-    if not inst.is_absolute():
-        inst = (Path.cwd() / inst).resolve()
-
+def render_markt(inst: Path) -> str:
+    """Erzeugt die Markt-/Anbieter-Ansicht als vollständiges HTML-Dokument
+    (wiederverwendbar: statischer Build UND MVP)."""
     data = load_yaml(inst / "markt" / "anbieter.yaml") or {}
     firmen = data.get("firmen", [])
     indikatoren = data.get("indikatoren", [])
@@ -164,12 +158,24 @@ web-verifiziert, ausgewogen; KEINE Anlage-/Markt-Timing-Empfehlung. Erzeugt mit
 view/marktsite.py — read-only.</p>
 </div></body></html>"""
 
+    return doc
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Anbieter-Landschaft + Makro-Indikatoren (markt.html).")
+    ap.add_argument("--instance", required=True)
+    ap.add_argument("--out", required=True)
+    args = ap.parse_args()
+    inst = Path(args.instance)
+    if not inst.is_absolute():
+        inst = (Path.cwd() / inst).resolve()
+    doc = render_markt(inst)
     o = Path(args.out)
     if not o.is_absolute():
         o = (Path.cwd() / o).resolve()
     o.parent.mkdir(parents=True, exist_ok=True)
     o.write_text(doc, encoding="utf-8")
-    print(f"Markt-Ansicht: {o} ({len(firmen)} Firmen, {len(indikatoren)} Indikatoren)")
+    print(f"Markt-Ansicht: {o}")
     return 0
 
 

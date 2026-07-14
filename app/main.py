@@ -460,6 +460,22 @@ def _sectors_and_areamap():
     return sectors, amap
 
 
+def _domain_labels():
+    """{Branche-Suffix -> Label} aus vocab-core/domain.yaml (z.B. 'gesundheit'->'Gesundheit')."""
+    core = BASE.parent
+    labels = {}
+    df = core / "vocab-core" / "domain.yaml"
+    if df.exists():
+        for t in (yaml.safe_load(df.read_text(encoding="utf-8")) or {}).get("terms", []):
+            labels[t["id"].split(".", 1)[-1]] = t.get("label", t["id"])
+    return labels
+
+
+PLABEL = {"openai": "OpenAI", "anthropic": "Anthropic", "google": "Google",
+          "microsoft": "Microsoft", "meta": "Meta", "deepseek": "DeepSeek",
+          "nvidia": "Nvidia", "open": "Offen (Hedge)"}
+
+
 @app.get("/radar", response_class=HTMLResponse)
 def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     if not user:
@@ -473,6 +489,8 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     sectors, amap = _sectors_and_areamap()
     sector_ids = [s["id"] for s in sectors]
     fallback = sector_ids[0] if sector_ids else "area.x"
+    dom_labels = _domain_labels()
+    dom_count, prov_count = {}, {}
     themes = []
     for d in eff:
         prop = d["prop"]
@@ -480,7 +498,16 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
         if sec not in sector_ids:
             sec = fallback
         themes.append({"id": str(prop.id), "name": prop.title, "ring": d["ring"],
-                       "sector": sec, "href": "#", "dom": prop.branchen or ""})
+                       "sector": sec, "href": "#", "dom": prop.branchen or "",
+                       "prov": prop.providers or "", "dep": prop.provider_dependency or ""})
+        for br in (prop.branchen or "").split():
+            dom_count[br] = dom_count.get(br, 0) + 1
+        for pr in (prop.providers or "").split():
+            prov_count[pr] = prov_count.get(pr, 0) + 1
+    branches = [{"value": b, "label": dom_labels.get(b, b.replace("-", " ").title()), "n": n}
+                for b, n in sorted(dom_count.items(), key=lambda kv: dom_labels.get(kv[0], kv[0]))]
+    provs = [{"value": p, "label": PLABEL.get(p, p), "n": n}
+             for p, n in sorted(prov_count.items(), key=lambda kv: -kv[1])]
     n_own = sum(1 for d in eff if d["origin"] == "own")
     n_ref = sum(1 for d in eff if d["origin"] != "own")
     hidden_blips = [db.get(Proposal, c.proposal_id) for c in db.scalars(
@@ -496,6 +523,7 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     return templates.TemplateResponse(request, "radar.html", {
         **_nav(user, db), "active": "radar", "by_ring": by_ring, "rings": RINGS, "n": len(eff),
         "n_own": n_own, "n_ref": n_ref, "hidden_blips": hidden_blips,
+        "branches": branches, "provs": provs,
         "themes_json": json.dumps(themes, ensure_ascii=False),
         "sectors_json": json.dumps(sectors, ensure_ascii=False), "radar_js": RADAR_JS})
 
@@ -563,10 +591,31 @@ def lagebild_view(request: Request, user=Depends(current_user), db=Depends(db_se
         html = (html.replace('href="profil.html"', 'href="/profil"')
                     .replace('href="index.html"', 'href="/radar"')
                     .replace('href="bericht.html"', 'href="/radar"')
-                    .replace('href="markt.html"', 'href="/radar"')
+                    .replace('href="markt.html"', 'href="/markt"')
                     .replace('href="kandidaten.html"', 'href="/proposals"'))
         html = re.sub(r'href="detail[^"]*\.html"', 'href="#" onclick="return false"', html)
     except Exception as e:
         html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
                 f"<p>Lagebild derzeit nicht verfügbar: {e}</p><p><a href='/profil'>← Profil</a></p></div>")
+    return HTMLResponse(html)
+
+
+@app.get("/markt", response_class=HTMLResponse)
+def markt_view(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """KI-Markt & Anbieter (Tendenzen + Makro-Indikatoren) — geteilte Marktsicht."""
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    import sys as _sys
+    if str(CORE_VIEW) not in _sys.path:
+        _sys.path.insert(0, str(CORE_VIEW))
+    try:
+        from marktsite import render_markt
+        html = render_markt(INSTANCE)
+        html = html.replace('href="index.html"', 'href="/radar"')
+        html = re.sub(r'href="detail-[^"]*\.html"', 'href="#" onclick="return false"', html)
+    except Exception as e:
+        html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
+                f"<p>Marktsicht derzeit nicht verfügbar: {e}</p><p><a href='/radar'>← Radar</a></p></div>")
     return HTMLResponse(html)

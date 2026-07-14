@@ -25,6 +25,11 @@
   #radararea .seclegend{font-size:11px;color:#8a867e;margin:9px 0 0;padding-top:9px;border-top:1px solid #eee7db;line-height:1.5}
   #radararea .seclegend b{color:#23262D}
   @media(max-width:560px){ #radararea .rpcols{grid-template-columns:repeat(2,1fr)}}
+  .radctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:6px 0 4px}
+  .radctl label{font-size:13px;color:#6b6862}
+  .radctl select{margin-left:6px}
+  #radararea .provnote{background:#fff;border:1px solid #C0362C;border-radius:10px;padding:9px 13px;margin:0 0 12px;font-size:13.5px;color:#23262D}
+  #radararea .provnote b{color:#C0362C}
 </style>
 <h1>Mein Radar</h1>
 <p class="sub">Deine Sicht — {{ n }} Einträge{% if n_ref %} ({{ n_ref }} aus dem geerbten Referenz-Grundstock ab 2017, {{ n_own }} eigene){% endif %}. Grundstock zentral gepflegt; eigene Aufnahmen aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a>.</p>
@@ -32,6 +37,24 @@
 {% if n == 0 and not hidden_blips %}
   <div class="card"><p class="sum">Noch leer — es ist auch kein Referenz-Grundstock hinterlegt. Der Plattform-Admin liest ihn unter <b>Mandanten</b> einmalig ein; danach nimmst du aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> Eigenes dazu.</p></div>
 {% else %}
+  {% if branches or provs %}
+  <div class="radctl">
+    {% if branches %}
+    <label>Branche
+      <select id="bran" onchange="branf()">
+        <option value="">Alle Branchen</option>
+        {% for b in branches %}<option value="{{ b.value }}">{{ b.label }} ({{ b.n }})</option>{% endfor %}
+      </select></label>
+    {% endif %}
+    {% if provs %}
+    <label>Blast-Radius
+      <select id="prov" onchange="renderRadarArea()">
+        <option value="">Anbieter-Abhängigkeit …</option>
+        {% for p in provs %}<option value="{{ p.value }}">{{ p.label }} ({{ p.n }})</option>{% endfor %}
+      </select></label>
+    {% endif %}
+  </div>
+  {% endif %}
   <div class="viewtoggle">
     <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
     <button class="vbtn" data-v="columns" onclick="setView('columns')">▤ Sektor-Spalten</button>
@@ -44,7 +67,7 @@
     {% if group %}
     <div class="ringhead">{{ r }} <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ group|length }}</span></div>
     {% for d in group %}{% set p = d.prop %}
-    <article class="card">
+    <article class="card cardlink" data-dom="{{ p.branchen }}">
       <div class="row">
         <div class="grow">
           <div>{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}
