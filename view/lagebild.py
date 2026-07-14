@@ -76,21 +76,15 @@ def slug(eid: str) -> str:
     return eid.split(".", 1)[-1]
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Management-Lagebild je Mandant.")
-    ap.add_argument("--instance", required=True)
-    ap.add_argument("--mode", choices=["internal", "public"], default="internal")
-    ap.add_argument("--out", required=True)
-    args = ap.parse_args()
-    if args.mode == "public":
-        print("Lagebild ist private Wertung (E25/E26) — nur internal."); return 0
-    inst = Path(args.instance)
-    if not inst.is_absolute():
-        inst = (Path.cwd() / inst).resolve()
-
+def render_lagebild(inst: Path, profile: dict | None = None) -> str:
+    """Baut das Lagebild-HTML für EINEN Mandanten. profile: das Profil-Dict
+    (aus DB/MVP) — wenn None, wird <instance>/mandant.yaml gelesen. So nutzen
+    statischer Build UND MVP dieselbe Logik (WERTEN-Schicht, pro Mandant)."""
     country = load_yaml(inst / "country.yaml") if (inst / "country.yaml").exists() else {}
-    profil = load_yaml(inst / "mandant.yaml") if (inst / "mandant.yaml").exists() else {}
-    profil = profil or {}
+    if profile is not None:
+        profil = profile or {}
+    else:
+        profil = (load_yaml(inst / "mandant.yaml") if (inst / "mandant.yaml").exists() else {}) or {}
     mandant = profil.get("name") or (country or {}).get("label", "diese Instanz")
 
     comp_label = {t["id"]: t.get("label", t["id"])
@@ -102,11 +96,13 @@ def main() -> int:
     # Wunschbranchen -> Themen in diesen Domänen ranken höher.
     risk = str(profil.get("risikofreudigkeit") or "").lower()
     if any(x in risk for x in ("früh", "fruh", "adoptier", "offensiv")):
-        chancen_rings, ringw = ("Adopt", "Pilot", "Explore"), {"Adopt": 2, "Pilot": 1, "Explore": 0}
+        # Risikofreudig: aufkommende (Explore-)Chancen bewusst nach vorne holen.
+        chancen_rings, ringw = ("Adopt", "Pilot", "Explore"), {"Adopt": 1, "Pilot": 1, "Explore": 2}
     elif "konservativ" in risk:
+        # Konservativ: nur Reifes (Adopt/Pilot) als Chance.
         chancen_rings, ringw = ("Adopt", "Pilot"), {"Adopt": 2, "Pilot": 1}
-    else:  # ausgewogen / kein Profil
-        chancen_rings, ringw = ("Adopt", "Pilot", "Explore"), {"Adopt": 2, "Pilot": 1, "Explore": -1}
+    else:  # ausgewogen / kein Profil: Explore zulässig, aber zurückhaltend.
+        chancen_rings, ringw = ("Adopt", "Pilot", "Explore"), {"Adopt": 2, "Pilot": 1, "Explore": -2}
     wunsch = [str(x).lower() for x in (profil.get("wunschbranchen") or [])]
 
     def wunsch_boost(e):
@@ -329,13 +325,27 @@ def main() -> int:
 Mandant aus dessen Wertung abgeleitet; im MVP je Mandant. KEINE Anlage-Aussage.
 Erzeugt mit view/lagebild.py — read-only.</p>
 </div></body></html>"""
+    return doc
 
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Management-Lagebild je Mandant.")
+    ap.add_argument("--instance", required=True)
+    ap.add_argument("--mode", choices=["internal", "public"], default="internal")
+    ap.add_argument("--out", required=True)
+    args = ap.parse_args()
+    if args.mode == "public":
+        print("Lagebild ist private Wertung (E25/E26) — nur internal."); return 0
+    inst = Path(args.instance)
+    if not inst.is_absolute():
+        inst = (Path.cwd() / inst).resolve()
+    doc = render_lagebild(inst)
     out = Path(args.out)
     if not out.is_absolute():
         out = (Path.cwd() / out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(doc, encoding="utf-8")
-    print(f"Lagebild: {out} · {len(placed)} Themen, {len(chancen)} Chancen, {len(actions)} Handlungsempfehlungen")
+    print(f"Lagebild: {out}")
     return 0
 
 

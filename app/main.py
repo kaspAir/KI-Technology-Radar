@@ -48,6 +48,8 @@ PROFILE_FIELDS = [
     ("kompetenz_luecken", "Kompetenz-Lücken / Aufbau-Ziele", "list", None),
 ]
 BASE = Path(__file__).resolve().parent
+CORE_VIEW = BASE.parent / "view"   # für die wiederverwendbare Lagebild-Logik
+INSTANCE = Path(os.environ.get("RADAR_INSTANCE", str(BASE.parent.parent / "KI-Technology-Radar-Instanz")))
 app = FastAPI(title="KI-Radar — Selbstbedienung")
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("RADAR_SECRET", "dev-only-change-me"))
 templates = Jinja2Templates(directory=str(BASE / "templates"))
@@ -201,3 +203,26 @@ async def save_profil(request: Request, user=Depends(current_user), db=Depends(d
         db.add(Profile(user_id=user.id, data=payload))
     db.commit()
     return RedirectResponse("/profil?saved=1", 303)
+
+
+# --- Lagebild: LIVE aus dem Profil (+ geteilter Radar-Instanz) berechnet ------
+@app.get("/lagebild", response_class=HTMLResponse)
+def lagebild_view(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    if not user:
+        return RedirectResponse("/login", 302)
+    prof = db.get(Profile, user.id)
+    data = json.loads(prof.data) if prof and prof.data else {}
+    import sys as _sys
+    if str(CORE_VIEW) not in _sys.path:
+        _sys.path.insert(0, str(CORE_VIEW))
+    try:
+        from lagebild import render_lagebild
+        # Dieselbe WERTEN-Logik wie der statische Build — hier mit dem PROFIL des
+        # eingeloggten Mandanten (aus der DB) statt aus mandant.yaml. So rechnet
+        # das Lagebild live: Profil speichern -> hier sofort neu berechnet.
+        html = render_lagebild(INSTANCE, data)
+    except Exception as e:
+        html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
+                f"<p>Lagebild derzeit nicht verfügbar: {e}</p>"
+                "<p><a href='/profil'>← Profil</a></p></div>")
+    return HTMLResponse(html)
