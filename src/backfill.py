@@ -112,7 +112,11 @@ def main() -> int:
                 doc["observations"].append(obs)
                 dump_yaml(of, doc)
                 mx += 1
-                events.append({"id": f"evt.bf-{mx:04d}", "at": now, "actor": "mensch:backfill",
+                # "at" = historisches Datum des Belegs (Konvention der Rekonstruktion,
+                # E21): so erscheint der Jahres-Snapshot im Zeit-Slider. REKONSTRUKTION
+                # markiert, dass die Erfassung selbst in der Gegenwart geschah.
+                at = (date + "T12:00:00+02:00") if len(date) == 10 else now
+                events.append({"id": f"evt.bf-{mx:04d}", "at": at, "actor": "mensch:backfill",
                                "verb": "observation.added", "subject_id": obs["id"],
                                "payload": {"to": m.get("suggested_entry"), "note": "REKONSTRUKTION (Backfill)"}})
             n_att += 1
