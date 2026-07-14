@@ -62,5 +62,15 @@ class Curation(Base):
     __table_args__ = (UniqueConstraint("user_id", "proposal_id", name="uq_user_prop"),)
 
 
+class Profile(Base):
+    """Mandanten-Profil (E24 Konfiguration, tenant-privat, 1:1 zum Nutzer/Mandant).
+    `data` = JSON der Profil-Felder (schwerpunkte, risikofreudigkeit, kpis, …).
+    Direkt-Speichern über /profil — steuert das Lagebild pro Mandant."""
+    __tablename__ = "profiles"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    data: Mapped[str] = mapped_column(Text, default="{}")
+    updated: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
