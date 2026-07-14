@@ -46,6 +46,7 @@
     {% if tenant %}<span class="muted">{{ tenant.name }} · {{ user.role }}</span>{% endif %}
   {% endif %}
   <span class="muted">{{ user.email }}</span>
+  <a href="/passwort" class="{{ 'active' if active=='passwort' }}">Passwort</a>
   <a href="/logout">Abmelden</a>
 </nav></header>
 {% endif %}

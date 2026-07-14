@@ -219,6 +219,36 @@ def logout(request: Request):
     return RedirectResponse("/login", 302)
 
 
+@app.get("/passwort", response_class=HTMLResponse)
+def passwort_form(request: Request, saved: int = 0, user=Depends(current_user), db=Depends(db_session)):
+    if not user:
+        return RedirectResponse("/login", 302)
+    return templates.TemplateResponse(request, "passwort.html",
+        {**_nav(user, db), "active": "passwort", "saved": bool(saved), "err": None})
+
+
+@app.post("/passwort")
+def passwort_change(request: Request, current: str = Form(...), new: str = Form(...),
+                    confirm: str = Form(...), user=Depends(current_user), db=Depends(db_session)):
+    """Eigenes Passwort ändern (Selbstbedienung, jede Rolle)."""
+    if not user:
+        return RedirectResponse("/login", 302)
+
+    def err(msg):
+        return templates.TemplateResponse(request, "passwort.html",
+            {**_nav(user, db), "active": "passwort", "saved": False, "err": msg}, status_code=400)
+
+    if not verify_pw(current, user.pw):
+        return err("Aktuelles Passwort stimmt nicht.")
+    if len(new) < 8:
+        return err("Neues Passwort braucht mindestens 8 Zeichen.")
+    if new != confirm:
+        return err("Die beiden neuen Passwörter stimmen nicht überein.")
+    user.pw = hash_pw(new)
+    db.commit()
+    return RedirectResponse("/passwort?saved=1", 303)
+
+
 def _nav(user, db):
     """Kontext für die Navigation (Rolle/Mandant)."""
     tenant = db.get(Tenant, user.tenant_id) if user and user.tenant_id else None

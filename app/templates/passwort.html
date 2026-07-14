@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% set active='passwort' %}{% block title %}Passwort ändern — KI-Radar{% endblock %}
+{% block body %}
+<h1>Passwort ändern</h1>
+<p class="sub">Für dein Konto <b>{{ user.email }}</b>.</p>
+{% if saved %}<div class="card" style="border-left:3px solid #2e7d32">✓ Passwort geändert. Beim nächsten Login gilt das neue.</div>{% endif %}
+{% if err %}<div class="err">{{ err }}</div>{% endif %}
+<form method="post" action="/passwort" class="card" style="max-width:420px">
+  <label class="muted">Aktuelles Passwort</label>
+  <input name="current" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box">
+  <label class="muted" style="margin-top:10px;display:block">Neues Passwort (≥ 8 Zeichen)</label>
+  <input name="new" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box">
+  <label class="muted" style="margin-top:10px;display:block">Neues Passwort wiederholen</label>
+  <input name="confirm" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box">
+  <div style="margin-top:12px"><button type="submit">Passwort ändern</button></div>
+</form>
+{% endblock %}
