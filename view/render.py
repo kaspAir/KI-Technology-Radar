@@ -455,14 +455,13 @@ function miniRadar(ts){
 }
 
 function renderRadar(byRing){
+  var leg='<p class="seclegend">Sektoren (Ziffern im Radar, im Uhrzeigersinn ab oben): '+SECTORS.map(function(s,i){return '<b>'+(i+1)+'</b> '+esc(s.label);}).join(' · ')+'</p>';
   var h='',any=false;
   RINGORDER.forEach(function(ring){
     var ts=byRing[ring];if(!ts||!ts.length)return;any=true;
-    h+='<section class="rpanel"><div class="rphead"><span class="rpname">'+ring+'</span><span class="rpmean">'+RINGMEAN[ring]+'</span><span class="rpcount">'+ts.length+'</span></div>'+miniRadar(ts)+'</section>';
+    h+='<section class="rpanel"><div class="rphead"><span class="rpname">'+ring+'</span><span class="rpmean">'+RINGMEAN[ring]+'</span><span class="rpcount">'+ts.length+'</span></div>'+miniRadar(ts)+leg+'</section>';
   });
-  if(!any)return '<p class="rpnone">Keine Themen für diese Branche.</p>';
-  var leg='<p class="seclegend">Sektoren (Ziffern im Radar, im Uhrzeigersinn ab oben): '+SECTORS.map(function(s,i){return '<b>'+(i+1)+'</b> '+esc(s.label);}).join(' · ')+'</p>';
-  return leg+h;
+  return any?h:'<p class="rpnone">Keine Themen für diese Branche.</p>';
 }
 
 function renderRadarArea(){
@@ -547,7 +546,7 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
   .mblip{{cursor:pointer}}
   .mblip:hover text{{fill:{GOLD}}}
   .rpnone{{color:#8a867e;font-size:14px;padding:8px 2px}}
-  .seclegend{{font-size:11.5px;color:#8a867e;margin:0 0 12px;line-height:1.5}}
+  .seclegend{{font-size:11px;color:#8a867e;margin:9px 0 0;padding-top:9px;border-top:1px solid #eee7db;line-height:1.5}}
   .seclegend b{{color:{INK}}}
   @media(max-width:560px){{.rpcols{{grid-template-columns:repeat(2,1fr)}}}}
 </style></head><body><div class="wrap">
