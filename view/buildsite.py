@@ -129,6 +129,10 @@ def main() -> int:
     if args.mode == "internal" and (inst / "markt" / "anbieter.yaml").exists():
         run("marktsite.py", "--instance", str(inst), "--out", str(out / "markt.html"))
 
+    # Management-Lagebild je Mandant (lagebild.html) — nur intern (E25).
+    if args.mode == "internal":
+        run("lagebild.py", "--instance", str(inst), "--mode", args.mode, "--out", str(out / "lagebild.html"))
+
     # Detail-Dossier je Eintrag (detail-<slug>.html) — Ziel der Blip-/Karten-Links.
     ids = entry_ids(inst)
     for eid in ids:

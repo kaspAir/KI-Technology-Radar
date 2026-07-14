@@ -255,6 +255,8 @@ def main() -> int:
                 else '<a class="navbtn" href="kandidaten.html">Eingangskorb — Kandidaten nach Branche →</a>')
     marktlink = ('' if args.mode == "public"
                  else '<a class="navbtn" href="markt.html">KI-Markt & Anbieter (Tendenzen) →</a>')
+    lagebildlink = ('' if args.mode == "public"
+                    else '<a class="navbtn primary" href="lagebild.html">📋 Management-Lagebild →</a>')
 
     # Länder-Umschalter (A1): navigiert zwischen den Länder-Radaren (je Land eine Instanz).
     cur_code = (country or {}).get("code")
@@ -527,6 +529,8 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
            background:#fff;border:1px solid #e7e3da;border-radius:9px;padding:7px 13px;
            transition:border-color .12s,background .12s;white-space:nowrap}}
   .navbtn:hover{{border-color:{GOLD};background:#faf7f1}}
+  .navbtn.primary{{background:{GOLD};color:#fff;border-color:{GOLD};font-weight:600}}
+  .navbtn.primary:hover{{background:#a8721a;color:#fff}}
   .legend{{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:#6b6862;margin:8px 0 18px}}
   .legend b{{color:{INK};font-weight:500}}
   .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}}
@@ -590,7 +594,7 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
 {country_sel} {tsel} {bran_sel} {prov_sel}
-<div class="navbtns"><a class="navbtn" href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}{marktlink}</div>
+<div class="navbtns">{lagebildlink}<a class="navbtn" href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}{marktlink}</div>
 <div class="viewtoggle">
 <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
 <button class="vbtn" data-v="columns" onclick="setView('columns')">▤ Sektor-Spalten</button></div>
