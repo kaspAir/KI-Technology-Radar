@@ -11,6 +11,7 @@ import os
 import re
 from pathlib import Path
 
+import yaml
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -154,6 +155,29 @@ def remove(request: Request, curation_id: int = Form(...), user=Depends(current_
     return RedirectResponse("/radar", 303)
 
 
+def _sectors_and_areamap():
+    """Sektoren (aus vocab-core-Bereichen) + Karte suggested_entry->Bereich (aus der
+    geteilten Instanz), damit die MVP-Kuratierungen wie im statischen Radar nach
+    Sektor platziert werden können."""
+    core = BASE.parent
+    areas = []
+    af = core / "vocab-core" / "area.yaml"
+    if af.exists():
+        for t in (yaml.safe_load(af.read_text(encoding="utf-8")) or {}).get("terms", []):
+            if not t.get("parent_id"):
+                areas.append((t["id"], t.get("label", t["id"])))
+    n = len(areas) or 1
+    sectors = [{"id": a, "label": lbl, "angle": -90 + i * (360 / n)} for i, (a, lbl) in enumerate(areas)]
+    amap = {}
+    edir = INSTANCE / "entries"
+    if edir.exists():
+        for ey in edir.glob("*/entry.yaml"):
+            e = yaml.safe_load(ey.read_text(encoding="utf-8")) or {}
+            area = e.get("area", "")
+            amap[e.get("id", "")] = ".".join(area.split(".")[:2]) if area.count(".") >= 1 else area
+    return sectors, amap
+
+
 @app.get("/radar", response_class=HTMLResponse)
 def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     if not user:
@@ -164,8 +188,30 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     by_ring = {r: [] for r in RINGS}
     for cur, prop in items:
         by_ring.setdefault(cur.ring, []).append((cur, prop))
+
+    # Daten für die Radar-Visualisierung (dieselbe Engine wie der statische Radar).
+    sectors, amap = _sectors_and_areamap()
+    sector_ids = [s["id"] for s in sectors]
+    fallback = sector_ids[0] if sector_ids else "area.x"
+    themes = []
+    for cur, prop in items:
+        sec = amap.get(prop.suggested_entry or "", "") or fallback
+        if sec not in sector_ids:
+            sec = fallback
+        themes.append({"id": str(prop.id), "name": prop.title, "ring": cur.ring,
+                       "sector": sec, "href": "#", "dom": prop.branchen or ""})
+    import sys as _sys
+    if str(CORE_VIEW) not in _sys.path:
+        _sys.path.insert(0, str(CORE_VIEW))
+    try:
+        from radar_js import RADAR_JS
+    except Exception:
+        RADAR_JS = ""
     return templates.TemplateResponse(request, "radar.html", {
-        "user": user, "by_ring": by_ring, "rings": RINGS, "n": len(items)})
+        "user": user, "by_ring": by_ring, "rings": RINGS, "n": len(items),
+        "themes_json": json.dumps(themes, ensure_ascii=False),
+        "sectors_json": json.dumps(sectors, ensure_ascii=False),
+        "radar_js": RADAR_JS})
 
 
 # --- Mandanten-Profil (E24, tenant-privat, DIREKT gespeichert) ---------------

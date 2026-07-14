@@ -1,32 +1,73 @@
 {% extends "base.html" %}{% set active='radar' %}{% block title %}Mein Radar — KI-Radar{% endblock %}
 {% block body %}
+<style>
+  /* Radar-Visualisierung (dieselbe Engine wie der statische Radar), auf #radararea
+     eingegrenzt, damit .chip etc. die MVP-Listen nicht stört. */
+  .viewtoggle{display:inline-flex;border:1px solid #e7e3da;border-radius:9px;overflow:hidden;margin:8px 0 14px}
+  .vbtn{font:inherit;font-size:13px;border:0;border-left:1px solid #e7e3da;background:#fff;color:#6b6862;padding:6px 13px;cursor:pointer}
+  .vbtn:first-child{border-left:0}
+  .vbtn.on{background:#C0851F;color:#fff}
+  #radararea .rpanel{background:#fff;border:1px solid #e7e3da;border-radius:14px;padding:14px 16px;margin:0 0 14px}
+  #radararea .rphead{display:flex;align-items:baseline;gap:9px;margin:0 0 10px}
+  #radararea .rpname{font-size:16px;font-weight:600;color:#C0851F}
+  #radararea .rpmean{font-size:12.5px;color:#8a867e}
+  #radararea .rpcount{margin-left:auto;font-size:12.5px;color:#8a867e;background:#faf7f1;border:1px solid #eee7db;border-radius:20px;padding:1px 9px}
+  #radararea .rpcols{display:grid;grid-template-columns:repeat(var(--nsec,5),1fr);gap:10px}
+  #radararea .rpcol{min-width:0}
+  #radararea .rpcolh{font-size:11px;font-weight:600;color:#6b6862;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #eee7db;padding-bottom:4px;margin-bottom:7px}
+  #radararea .chip{display:block;font-size:12.5px;color:#23262D;text-decoration:none;background:#faf7f1;border:1px solid #eee7db;border-radius:8px;padding:5px 9px;margin:0 0 6px;line-height:1.32}
+  #radararea .chip:hover{border-color:#C0851F;color:#C0851F}
+  #radararea .rpempty{font-size:12px;color:#cfc9bd}
+  #radararea .mini{width:100%;height:auto;display:block}
+  #radararea .mini text{font-family:system-ui,sans-serif}
+  #radararea .mblip{cursor:pointer}
+  #radararea .rpnone{color:#8a867e;font-size:14px;padding:8px 2px}
+  #radararea .seclegend{font-size:11px;color:#8a867e;margin:9px 0 0;padding-top:9px;border-top:1px solid #eee7db;line-height:1.5}
+  #radararea .seclegend b{color:#23262D}
+  @media(max-width:560px){ #radararea .rpcols{grid-template-columns:repeat(2,1fr)}}
+</style>
 <h1>Mein Radar</h1>
 <p class="sub">Deine kuratierte Sicht — {{ n }} Einträge. Aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> aufgenommen; jederzeit anpassbar.</p>
 
 {% if n == 0 %}
   <div class="card"><p class="sum">Noch leer. Geh zu den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> und nimm auf, was dich interessiert.</p></div>
-{% endif %}
+{% else %}
+  <div class="viewtoggle">
+    <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
+    <button class="vbtn" data-v="columns" onclick="setView('columns')">▤ Sektor-Spalten</button>
+  </div>
+  <div id="radararea"></div>
 
-{% for r in rings %}
-  {% set group = by_ring.get(r) %}
-  {% if group %}
-  <div class="ringhead">{{ r }} <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ group|length }}</span></div>
-  {% for cur, p in group %}
-  <article class="card">
-    <div class="row">
-      <div class="grow">
-        <div>{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}</div>
-        <div style="font-size:15px;font-weight:600;margin:4px 0 2px">
-          {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
-        <p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>
+  <h2 style="font-size:16px;color:var(--gold);margin:22px 0 6px">Details je Ring</h2>
+  {% for r in rings %}
+    {% set group = by_ring.get(r) %}
+    {% if group %}
+    <div class="ringhead">{{ r }} <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ group|length }}</span></div>
+    {% for cur, p in group %}
+    <article class="card">
+      <div class="row">
+        <div class="grow">
+          <div>{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}</div>
+          <div style="font-size:15px;font-weight:600;margin:4px 0 2px">
+            {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
+          <p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>
+        </div>
+        <form method="post" action="/remove">
+          <input type="hidden" name="curation_id" value="{{ cur.id }}">
+          <button type="submit" class="ghost">entfernen</button>
+        </form>
       </div>
-      <form method="post" action="/remove">
-        <input type="hidden" name="curation_id" value="{{ cur.id }}">
-        <button type="submit" class="ghost">entfernen</button>
-      </form>
-    </div>
-  </article>
+    </article>
+    {% endfor %}
+    {% endif %}
   {% endfor %}
-  {% endif %}
-{% endfor %}
+{% endif %}
+{% if n > 0 %}
+<script>
+const THEMES={{ themes_json|safe }};
+const SECTORS={{ sectors_json|safe }};
+{{ radar_js|safe }}
+renderRadarArea();
+</script>
+{% endif %}
 {% endblock %}
