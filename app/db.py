@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+from typing import Optional
 
 from sqlalchemy import (Boolean, DateTime, ForeignKey, Integer, String, Text,
                         UniqueConstraint, create_engine, func)
@@ -45,7 +46,7 @@ class Tenant(Base):
     __tablename__ = "tenants"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
-    parent_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
     is_reference: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
     children = relationship("Tenant", backref="parent", remote_side=[id])
@@ -56,7 +57,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     pw: Mapped[str] = mapped_column(String(255))
-    tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(20), default="member")   # admin|member|viewer
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
