@@ -3,101 +3,113 @@
 > Aus „läuft auf meinem Laptop" wird eine echte Website. Ein **zentraler**
 > Gunicorn-Prozess auf dem Infomaniak-Host bedient **alle** Mandanten; jeder
 > öffnet nur eine URL und loggt sich ein — kein localhost, kein PowerShell, keine
-> Installation beim Kunden.
+> Installation beim Kunden. Aufbau **identisch zum Dashboard** (dashboard-projekte.ch).
 
 ## 1. Das Bild
 
 ```
-  Mandant (Browser) ──HTTPS──▶ radar.ki-tech-radar.ch (Docroot)
-                                   │  .htaccess ─▶ proxy.php  (PHP-Reverse-Proxy)
+  Mandant (Browser) ──HTTPS──▶ app.ki-tech-radar.ch (Docroot)
+                                   │  .htaccess ─▶ proxy.php  ($BACKEND=127.0.0.1:8030)
                                    ▼
-                        127.0.0.1:8030  Gunicorn (app.main:app)
+                        127.0.0.1:8030  Gunicorn/UvicornWorker (app.main:app)
                                    │
                                    ▼
                         MariaDB (Infomaniak)  +  Instanz-Repo (Grundstock/Pool)
 ```
 
-Genau das Muster von **hermespia.ch** (Gunicorn + PHP-Proxy, kein Docker), nur mit
-eigenem Port und eigener DB.
+- **App-Root** (Kern-Klon) `~/radar-app/` mit `.venv/` und `.env/` darin.
+- **Docroot** `~/sites/app.ki-tech-radar.ch/` mit `proxy.php` + `.htaccess`.
+- **Watchdog** `deploy/keepalive.sh <PORT> <WORKERS>` per Cron (`@reboot` + `*/3`).
+- Ports auf dem Host: hermespia 8003, ProS 801x, Dashboard 8021–8023 → **Radar 8030**.
 
-## 2. Einmalige Einrichtung (auf dem Host, du)
+## 2. Einmalige Einrichtung (du, auf dem Host + Infomaniak)
 
-**a) MariaDB** (in Infomaniak schon vorhanden): eine Datenbank + Benutzer anlegen,
-DSN notieren. Format:
-`mysql+pymysql://USER:PASSWORT@HOST:3306/DBNAME?charset=utf8mb4`
+**a) MariaDB** (vorhanden): DB + Benutzer anlegen, DSN notieren:
+`mysql+pymysql://USER:PW@HOST:3306/DBNAME?charset=utf8mb4`
 
-**b) Subdomain** z.B. `radar.ki-tech-radar.ch` mit eigenem Docroot; HTTPS-Zertifikat
-aktivieren (Infomaniak: Let's Encrypt, ein Klick).
+**b) Subdomain** `app.ki-tech-radar.ch` mit eigenem Docroot anlegen; im Infomaniak-Panel
+**HTTPS erzwingen** (Let's Encrypt + „Force HTTPS"). *Nicht* über `.htaccess` — hinter
+dem Plattform-TLS gäbe das eine Endlosschleife (darum macht es das Dashboard auch nicht).
 
-**c) SSH-Deploy-Key** fürs private Instanz-Repo (nur lesend), damit der Grundstock/Pool
-geseedet werden kann (wie bei der Ingestion, `docs/ingestion-betrieb.md`). Ohne Key
-läuft die App trotzdem — dann Grundstock später über den Admin-Button einlesen.
+**c) App klonen:**
+```sh
+git clone -b dev https://github.com/kaspAir/KI-Technology-Radar ~/radar-app
+```
 
-**d) Secrets-Datei** `~/.ki-radar-env` (chmod 600, **nicht** ins Repo):
+**d) Secrets** in `~/radar-app/.env` (KEY=VALUE je Zeile, **nicht** im Repo):
+```
+RADAR_DB=mysql+pymysql://USER:PW@HOST:3306/DBNAME?charset=utf8mb4
+RADAR_SECRET=<40+ Zeichen Zufall, STABIL halten>
+RADAR_ADMIN_EMAIL=k.broennimann@gmail.com
+RADAR_ADMIN_PW=<starkes Initial-Passwort>
+RADAR_INSTANCE=/home/clients/<id>/radar-instance
+RADAR_PORT=8030
+RADAR_WORKERS=2
+```
+`chmod 600 ~/radar-app/.env`  ·  Zufall z.B. `openssl rand -hex 24`.
+
+**e) SSH-Deploy-Key** fürs private Instanz-Repo (nur lesend, wie bei der Ingestion),
+damit Grundstock/Pool automatisch geseedet werden. Ohne Key startet die App trotzdem —
+Grundstock dann später über den Admin-Button „Referenz-Grundstock einlesen".
+
+## 3. Erster Start
 
 ```sh
-export RADAR_DB='mysql+pymysql://USER:PW@HOST:3306/DBNAME?charset=utf8mb4'
-export RADAR_SECRET='<40+ Zeichen Zufall, STABIL halten>'   # openssl rand -hex 24
-export RADAR_ADMIN_EMAIL='k.broennimann@gmail.com'
-export RADAR_ADMIN_PW='<starkes Initial-Passwort>'
-export RADAR_PORT='8030'
+bash ~/radar-app/deploy/app-run.sh
 ```
-`chmod 600 ~/.ki-radar-env`
-
-## 3. Erster Start (auf dem Host)
-
-```sh
-mkdir -p ~/ki-radar && cd ~/ki-radar
-git clone -b dev https://github.com/kaspAir/KI-Technology-Radar core
-bash core/deploy/app-run.sh
-```
-`app-run.sh` erstellt die venv, installiert Abhängigkeiten, legt die Tabellen an,
-seedet Referenz-Grundstock + Vorschläge-Pool (idempotent) und startet Gunicorn als
-Daemon (PID in `~/ki-radar/gunicorn.pid`). Der Plattform-Admin aus `RADAR_ADMIN_EMAIL/PW`
-wird beim ersten Start angelegt.
+Das aktualisiert den Code, klont die Instanz (falls Key), baut `.venv`, installiert
+Abhängigkeiten, legt die MariaDB-Tabellen an, seedet Grundstock + Pool (idempotent) und
+startet Gunicorn über den Watchdog. Der Plattform-Admin aus `RADAR_ADMIN_*` wird beim
+ersten Start angelegt. Test lokal auf dem Host: `curl -s 127.0.0.1:8030/healthz` → `ok`.
 
 ## 4. Docroot verdrahten
 
-`deploy/docroot/proxy.php` und `deploy/docroot/.htaccess` in den Docroot der Subdomain
-kopieren. `proxy.php` nutzt `RADAR_PORT` (Default 8030 = zu `gunicorn_conf.py` passend).
-Danach ist `https://radar.ki-tech-radar.ch` live.
-
-## 5. Am Leben halten (statt systemd)
-
-Managed Hosting hat kein systemd. `app-keepalive.sh` startet den Prozess neu, falls er
-nicht läuft (z.B. nach Host-Neustart). Per Cron (Infomaniak Cron-Manager):
-
+`deploy/docroot/proxy.php` und `deploy/docroot/.htaccess` in `~/sites/app.ki-tech-radar.ch/`
+kopieren. `$BACKEND` in `proxy.php` steht schon auf `127.0.0.1:8030`.
+```sh
+cp ~/radar-app/deploy/docroot/proxy.php ~/radar-app/deploy/docroot/.htaccess ~/sites/app.ki-tech-radar.ch/
 ```
-*/5 * * * *  $HOME/ki-radar/core/deploy/app-keepalive.sh >> $HOME/ki-radar/app.log 2>&1
+Danach ist `https://app.ki-tech-radar.ch` live.
+
+## 5. Am Leben halten (Cron, wie das Dashboard)
+
+Im Infomaniak Cron-Manager:
 ```
+@reboot   /home/clients/<id>/radar-app/deploy/keepalive.sh 8030 2
+*/3 * * * * /home/clients/<id>/radar-app/deploy/keepalive.sh 8030 2 >> /home/clients/<id>/radar-app/logs/watchdog.log 2>&1
+```
+`keepalive.sh` prüft `http://127.0.0.1:8030/healthz` und startet den Prozess nur, wenn er
+nicht antwortet (nach Reboot oder Absturz).
 
 ## 6. Aktualisieren (neue Version ausrollen)
 
 ```sh
-bash ~/ki-radar/core/deploy/app-run.sh
+bash ~/radar-app/deploy/app-run.sh
 ```
-Holt `origin/dev`, installiert ggf. neue Abhängigkeiten, seedet nach und startet den
-Prozess neu. (Später als Jenkins-Job automatisierbar — SSH-Freischaltung durch dich.)
+Holt `origin/dev`, installiert ggf. neue Abhängigkeiten, seedet nach, startet neu.
+(Später als Jenkins-Job automatisierbar — SSH-Freischaltung durch dich.)
 
-## 7. Erster Rundgang (im Browser)
+## 7. Erster Rundgang (Browser)
 
-1. `https://radar.ki-tech-radar.ch` → Login als Plattform-Admin.
-2. **Mandanten** → „Referenz-Grundstock einlesen" (falls nicht schon per Seed) + Mandant + ersten Admin anlegen.
+1. `https://app.ki-tech-radar.ch` → Login als Plattform-Admin.
+2. **Mandanten** → ggf. „Referenz-Grundstock einlesen" + Mandant + ersten Admin anlegen.
 3. Mandanten-Admin loggt sich ein → erbt den Grundstock, kuratiert, legt Nutzer/Untermandanten an.
 
 ## 8. Wichtige Hinweise
 
 - **`RADAR_SECRET` stabil halten** — ändern loggt alle aus (Daten bleiben in der DB).
 - **Datenresidenz (CH):** MariaDB + Host bei Infomaniak (CH) — passt. Vor echten
-  Mandantendaten prüfen, dass keine Verarbeitung ausserhalb CH stattfindet.
+  Mandantendaten sicherstellen, dass keine Verarbeitung ausserhalb CH stattfindet.
 - **Migrationen:** die SQLite-Auto-Migration (`_ensure_columns`) ist **nur Dev**. Bei
-  MariaDB legt der erste Start die Tabellen an; spätere Schema-Änderungen brauchen
-  echte Migrationen (Alembic) — offener Punkt vor produktivem Dauerbetrieb.
+  MariaDB legt der erste Start die Tabellen an; spätere Schema-Änderungen brauchen echte
+  Migrationen (Alembic) — offener Punkt vor produktivem Dauerbetrieb.
 - **Backups:** MariaDB-Dump in die Infomaniak-Backups aufnehmen (die DB ist jetzt die
-  Quelle der Mandanten-Kuratierung, nicht mehr nur eine Projektion).
+  Quelle der Mandanten-Kuratierung).
+- **Statische Seite bleibt getrennt:** `dev/test/int/ki-tech-radar.ch` = statisches
+  Schaufenster; `app.ki-tech-radar.ch` = angemeldete App. Zwei verschiedene Produkte.
 
 ## 9. Fehlersuche
 
-- **502 im Browser:** Gunicorn läuft nicht → `cat ~/ki-radar/app.log`, `app-run.sh` erneut.
-- **Login klappt nicht:** `RADAR_ADMIN_*` in `~/.ki-radar-env` gesetzt? Erststart gelaufen?
-- **Prozess prüfen:** `cat ~/ki-radar/gunicorn.pid` + `kill -0 <pid>`; Port: `curl -s 127.0.0.1:8030/login | head`.
+- **502 im Browser:** Gunicorn läuft nicht → `tail ~/radar-app/logs/error.log`, `app-run.sh` erneut.
+- **Login/Startprobleme:** `RADAR_*` in `.env` gesetzt? `curl -s 127.0.0.1:8030/healthz`.
+- **Prozess:** `cat ~/radar-app/tmp/gunicorn.pid` + `kill -0 <pid>`.

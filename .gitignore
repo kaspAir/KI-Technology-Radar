@@ -9,6 +9,9 @@ venv/
 # Lokale Konfiguration (Pfad zur privaten Instanz o. Ä.)
 radar.config.yaml
 
+# Produktions-Secrets (RADAR_DB/SECRET/Admin) — NIE ins Repo (liegt in <app>/.env)
+.env
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,68 +1,56 @@
 #!/usr/bin/env bash
-# app-run.sh — Selbstbedienungs-Radar (MVP) auf dem Infomaniak-Host ausrollen & starten.
+# app-run.sh — Radar-MVP auf dem Infomaniak-Host ausrollen/aktualisieren & starten.
+# Layout wie das Dashboard: App-Root = dieses Repo, .venv + .env darin, Docroot separat.
 #
-# Macht aus „läuft auf meinem Laptop" eine echte Website: ein zentraler Gunicorn-
-# Prozess an 127.0.0.1:$RADAR_PORT; der PHP-Proxy im Docroot (wie hermespia.ch)
-# leitet die öffentliche Domain darauf um. Mandanten öffnen nur die URL + Login.
+# Einmal einrichten (siehe docs/mvp-betrieb.md), danach je Update erneut aufrufen:
+#   bash <app>/deploy/app-run.sh
 #
-# Ablauf: Kern-Repo aktualisieren -> venv/Abhängigkeiten -> DB init + Grundstock/Pool
-#         seeden (idempotent) -> Gunicorn (neu) starten (Daemon + PID-Datei).
-#
-# Secrets & Konfiguration kommen aus $HOME/.ki-radar-env (chmod 600), NICHT aus dem
-# Repo. Erwartete Variablen dort:
+# .env (KEY=VALUE, chmod 600, NICHT im Repo) muss enthalten:
 #   RADAR_DB=mysql+pymysql://USER:PW@HOST:3306/DB?charset=utf8mb4
-#   RADAR_SECRET=<langer Zufallsstring, stabil halten>
-#   RADAR_ADMIN_EMAIL=... ; RADAR_ADMIN_PW=...   (Bootstrap des Plattform-Admins)
-#   RADAR_PORT=8030                               (lokaler Gunicorn-Port)
-# Einmalige Einrichtung: siehe docs/mvp-betrieb.md.
+#   RADAR_SECRET=<langer Zufall, stabil halten>
+#   RADAR_ADMIN_EMAIL=... ; RADAR_ADMIN_PW=...
+#   RADAR_INSTANCE=<Pfad zum Instanz-Klon>        (optional; Default siehe unten)
+#   RADAR_PORT=8030 ; RADAR_WORKERS=2             (optional)
 set -eu
 
-WORKDIR="${KI_RADAR_WORKDIR:-$HOME/ki-radar}"
-KERN_URL="https://github.com/kaspAir/KI-Technology-Radar"
-INST_URL="git@github.com:kaspAir/KI-Technology-Radar-Instanz.git"   # SSH (Read-Deploy-Key)
+APP="$(cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$APP"
 BRANCH="${KI_RADAR_BRANCH:-dev}"
-PIDFILE="${KI_RADAR_PIDFILE:-$WORKDIR/gunicorn.pid}"
+INST_URL="git@github.com:kaspAir/KI-Technology-Radar-Instanz.git"
 
-[ -f "$HOME/.ki-radar-env" ] && . "$HOME/.ki-radar-env"
-: "${RADAR_DB:?RADAR_DB nicht gesetzt (erwartet in \$HOME/.ki-radar-env)}"
-: "${RADAR_SECRET:?RADAR_SECRET nicht gesetzt}"
-export RADAR_DB RADAR_SECRET RADAR_ADMIN_EMAIL RADAR_ADMIN_PW RADAR_PORT
-export RADAR_INSTANCE="${RADAR_INSTANCE:-$WORKDIR/instance}"
+# ---- Konfig laden -------------------------------------------------------------
+set -a; [ -f .env ] && . ./.env; set +a
+: "${RADAR_DB:?RADAR_DB fehlt in .env}"
+: "${RADAR_SECRET:?RADAR_SECRET fehlt in .env}"
+PORT="${RADAR_PORT:-8030}"; WORKERS="${RADAR_WORKERS:-2}"
+export RADAR_INSTANCE="${RADAR_INSTANCE:-$APP/../radar-instance}"
 
-mkdir -p "$WORKDIR"; cd "$WORKDIR"
+# ---- Code aktualisieren -------------------------------------------------------
+if [ -d .git ]; then git fetch -q && git reset -q --hard "origin/$BRANCH"; fi
 
-# ---- Repos aktualisieren ------------------------------------------------------
-if [ -d core/.git ]; then git -C core fetch -q && git -C core reset -q --hard "origin/$BRANCH"
-else git clone -q -b "$BRANCH" "$KERN_URL" core; fi
-# Instanz (für Grundstock/Pool-Seed); optional, wenn kein SSH-Key: überspringen.
-if [ -d instance/.git ]; then git -C instance pull -q --ff-only || true
-elif git clone -q -b "$BRANCH" "$INST_URL" instance 2>/dev/null; then :; else
-  echo "Hinweis: Instanz-Repo nicht klonbar (kein Key?) — Seed wird übersprungen."; fi
+# ---- Instanz (Grundstock/Pool) holen, falls SSH-Key vorhanden -----------------
+if [ -d "$RADAR_INSTANCE/.git" ]; then git -C "$RADAR_INSTANCE" pull -q --ff-only || true
+elif git clone -q -b "$BRANCH" "$INST_URL" "$RADAR_INSTANCE" 2>/dev/null; then :; else
+  echo "Hinweis: Instanz nicht klonbar (kein Key?) — Grundstock später per Admin-Button."; fi
 
 # ---- Python-Umgebung ----------------------------------------------------------
-if [ ! -x appvenv/bin/python ]; then python3 -m venv appvenv; ./appvenv/bin/pip install -q --upgrade pip; fi
-./appvenv/bin/pip install -q -r core/app/requirements.txt
-PY=$PWD/appvenv/bin/python
+if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; .venv/bin/pip install -q --upgrade pip; fi
+.venv/bin/pip install -q -r app/requirements.txt
 
-# ---- DB initialisieren + Grundstock/Pool einlesen (idempotent) ----------------
-cd core
-"$PY" -c "from app.db import init_db; init_db(); print('DB bereit')"
+# ---- DB init + Grundstock/Pool seeden (idempotent) ----------------------------
+.venv/bin/python -c "from app.db import init_db; init_db(); print('DB bereit')"
 if [ -d "$RADAR_INSTANCE/entries" ]; then
-  "$PY" -m app.seed_reference "$RADAR_INSTANCE" || echo "Referenz-Seed übersprungen."
-  [ -f "$RADAR_INSTANCE/inbox/pool.yaml" ] && "$PY" -m app.seed "$RADAR_INSTANCE/inbox/pool.yaml" || true
+  .venv/bin/python -m app.seed_reference "$RADAR_INSTANCE" || echo "Referenz-Seed übersprungen."
+  [ -f "$RADAR_INSTANCE/inbox/pool.yaml" ] && .venv/bin/python -m app.seed "$RADAR_INSTANCE/inbox/pool.yaml" || true
 fi
 
-# ---- Gunicorn (neu) starten ---------------------------------------------------
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  echo "Stoppe alten Prozess $(cat "$PIDFILE")"; kill "$(cat "$PIDFILE")" 2>/dev/null || true; sleep 2
-fi
-exec_env() { RADAR_DB="$RADAR_DB" RADAR_SECRET="$RADAR_SECRET" RADAR_INSTANCE="$RADAR_INSTANCE" \
-             RADAR_ADMIN_EMAIL="${RADAR_ADMIN_EMAIL:-}" RADAR_ADMIN_PW="${RADAR_ADMIN_PW:-}" \
-             RADAR_PORT="${RADAR_PORT:-8030}" "$@"; }
-exec_env "$PWD/../appvenv/bin/gunicorn" -c app/gunicorn_conf.py --pid "$PIDFILE" --daemon app.main:app
+# ---- Prozess (neu) starten via Watchdog ---------------------------------------
+[ -f tmp/gunicorn.pid ] && kill "$(cat tmp/gunicorn.pid)" 2>/dev/null || true
+sleep 1
+sh deploy/keepalive.sh "$PORT" "$WORKERS"
 sleep 2
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  echo "[$(date '+%F %T')] Radar-MVP läuft (PID $(cat "$PIDFILE")) an 127.0.0.1:${RADAR_PORT:-8030}"
+if curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+  echo "[$(date '+%F %T')] Radar-MVP läuft an 127.0.0.1:$PORT (PID $(cat tmp/gunicorn.pid 2>/dev/null))"
 else
-  echo "FEHLER: Gunicorn nicht gestartet — Logs prüfen."; exit 1
+  echo "FEHLER: Prozess nicht gesund — logs/error.log prüfen."; tail -n 20 logs/error.log 2>/dev/null || true; exit 1
 fi

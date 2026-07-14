@@ -1,69 +1,70 @@
 <?php
-/**
- * proxy.php — Reverse-Proxy vom öffentlichen Docroot auf den lokalen Radar-MVP.
- *
- * Infomaniak Managed Hosting erlaubt kein mod_proxy -> dieser PHP-Proxy leitet
- * JEDE Anfrage (Methode/Pfad/Query/Header/Cookies/Body) an den Gunicorn-Prozess
- * an 127.0.0.1:PORT weiter und gibt Status/Header/Body zurück. Gleiche Bauart wie
- * der bewährte hermespia.ch-Proxy. Bindet zusammen mit .htaccess (alles -> proxy.php).
- *
- * WICHTIG: PORT muss zu RADAR_PORT (gunicorn_conf.py) passen.
- */
-$PORT = getenv('RADAR_PORT') ?: '8030';
-$UPSTREAM = "http://127.0.0.1:$PORT";
+// PHP-Reverse-Proxy für Infomaniak Managed Hosting (Muster wie dashboard-projekte.ch).
+//
+// In den Web-Root der Radar-Subdomain legen (zusammen mit .htaccess) und $BACKEND
+// auf den Gunicorn-Port des Radar-MVP setzen:
+//
+//   app.ki-tech-radar.ch  ->  127.0.0.1:8030
+//
+// HTTPS wird von der Infomaniak-Plattform erzwungen (Panel), NICHT hier per Redirect.
 
-// --- Ziel-URL: Originalpfad + Query 1:1 übernehmen ---------------------------
-$uri = $_SERVER['REQUEST_URI'] ?? '/';
-$url = $UPSTREAM . $uri;
+$BACKEND = 'http://127.0.0.1:8030';
 
+$target = $BACKEND . ($_SERVER['REQUEST_URI'] ?? '/');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$body = file_get_contents('php://input');
 
-// --- Anfrage-Header einsammeln (Hop-by-Hop weglassen) ------------------------
-$skip = ['host' => 1, 'connection' => 1, 'content-length' => 1,
-         'accept-encoding' => 1, 'transfer-encoding' => 1];
-$fwd = [];
+$ch = curl_init($target);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HEADER, true);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+
+// Request-Header durchreichen (Host weglassen – Backend bindet lokal)
+$headers = [];
 foreach (getallheaders() as $k => $v) {
-    if (isset($skip[strtolower($k)])) continue;
-    $fwd[] = "$k: $v";
+    if (strtolower($k) === 'host') {
+        continue;
+    }
+    $headers[] = "$k: $v";
+}
+$headers[] = 'X-Forwarded-Proto: https';
+$headers[] = 'X-Forwarded-For: ' . ($_SERVER['REMOTE_ADDR'] ?? '');
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+// Request-Body bei schreibenden Methoden
+if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+    curl_setopt($ch, CURLOPT_POSTFIELDS, file_get_contents('php://input'));
 }
 
-$ch = curl_init($url);
-curl_setopt_array($ch, [
-    CURLOPT_CUSTOMREQUEST  => $method,
-    CURLOPT_HTTPHEADER     => $fwd,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HEADER         => true,
-    CURLOPT_FOLLOWLOCATION => false,   // Redirects (302/303) an den Browser durchreichen
-    CURLOPT_TIMEOUT        => 60,
-    CURLOPT_ENCODING       => '',      // keine transparente Kompression
-]);
-if ($method !== 'GET' && $method !== 'HEAD') {
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-}
-
-$resp = curl_exec($ch);
-if ($resp === false) {
+$response = curl_exec($ch);
+if ($response === false) {
     http_response_code(502);
     header('Content-Type: text/plain; charset=utf-8');
-    echo "Radar-MVP nicht erreichbar (502). Läuft der Prozess? " . curl_error($ch);
+    echo 'Bad Gateway: Radar-MVP nicht erreichbar.';
     exit;
 }
 
-$status     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-$rawHeaders = substr($resp, 0, $headerSize);
-$respBody   = substr($resp, $headerSize);
+$header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+$status      = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$raw_headers = substr($response, 0, $header_size);
+$body        = substr($response, $header_size);
 curl_close($ch);
 
-// --- Antwort-Header zurückgeben (Set-Cookie behalten!) -----------------------
 http_response_code($status);
-$dropResp = ['transfer-encoding' => 1, 'content-length' => 1, 'connection' => 1,
-             'content-encoding' => 1];
-foreach (explode("\r\n", $rawHeaders) as $line) {
-    if (strpos($line, ':') === false) continue;          // Statuszeile o.ä.
-    list($name, ) = explode(':', $line, 2);
-    if (isset($dropResp[strtolower(trim($name))])) continue;
-    header($line, false);                                 // false = mehrfach erlauben (Set-Cookie)
+foreach (explode("\r\n", $raw_headers) as $line) {
+    if ($line === '') {
+        continue;
+    }
+    // Status- und Hop-by-hop-Zeilen nicht weiterreichen (Set-Cookie bleibt erhalten)
+    if (stripos($line, 'HTTP/') === 0) {
+        continue;
+    }
+    if (stripos($line, 'Transfer-Encoding:') === 0) {
+        continue;
+    }
+    if (stripos($line, 'Connection:') === 0) {
+        continue;
+    }
+    header($line, false);
 }
-echo $respBody;
+echo $body;

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
@@ -35,6 +35,13 @@ INSTANCE = Path(os.environ.get("RADAR_INSTANCE", str(BASE.parent.parent / "KI-Te
 app = FastAPI(title="KI-Radar — Selbstbedienung")
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("RADAR_SECRET", "dev-only-change-me"))
 templates = Jinja2Templates(directory=str(BASE / "templates"))
+
+
+@app.get("/healthz", response_class=PlainTextResponse)
+def healthz():
+    """Liveness für den Keepalive-Watchdog (ohne Auth/DB — antwortet, solange der
+    Prozess lebt)."""
+    return "ok"
 
 PROFILE_FIELDS = [
     ("§", "Identität & Mandat", None, None),

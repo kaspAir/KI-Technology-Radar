@@ -1,12 +1,11 @@
-# Leitet ALLE Anfragen des Docroots an den Reverse-Proxy (proxy.php) weiter,
-# der sie an den lokalen Radar-MVP (Gunicorn, 127.0.0.1:$RADAR_PORT) reicht.
-# In den Docroot der (Sub-)Domain legen: proxy.php + diese .htaccess.
+# Zusammen mit proxy.php in den Web-Root der Radar-Subdomain legen.
+# Leitet alle Anfragen an den PHP-Proxy (der an Gunicorn weiterreicht).
+# HTTPS wird von der Infomaniak-Plattform erzwungen (Panel), NICHT hier.
+
 RewriteEngine On
 
-# HTTPS erzwingen (Login-Daten nie im Klartext).
-RewriteCond %{HTTPS} !=on
-RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# proxy.php selbst direkt ausliefern (sonst Endlosschleife)
+RewriteRule ^proxy\.php$ - [L]
 
-# proxy.php selbst nicht erneut umschreiben.
-RewriteCond %{REQUEST_URI} !^/proxy\.php
-RewriteRule ^ /proxy.php [L,QSA]
+# alles Übrige durch den Proxy
+RewriteRule ^ proxy.php [QSA,L]
