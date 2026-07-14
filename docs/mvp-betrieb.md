@@ -108,6 +108,32 @@ Holt `origin/dev`, installiert ggf. neue Abhängigkeiten, seedet nach, startet n
 - **Statische Seite bleibt getrennt:** `dev/test/int/ki-tech-radar.ch` = statisches
   Schaufenster; `app.ki-tech-radar.ch` = angemeldete App. Zwei verschiedene Produkte.
 
+## 10. Nächtliche Ingestion (neue Belege der letzten 24 h)
+
+`deploy/app-ingest.sh` holt aus den kuratierten Quellen (RSS/Atom + arXiv, E6) die
+neuesten Belege und spiegelt neue Kandidaten in die MariaDB → sie erscheinen sofort
+unter „Vorschläge". Der Agent sammelt/entwirft nur (E4/E20), ratifiziert wird von Hand.
+
+**Key separat ablegen** (nicht ins Web-`.env`) — `~/.ki-radar-env` (chmod 600):
+```
+export ANTHROPIC_API_KEY='sk-ant-...'
+```
+**Test (kostenlos, nur Mechanik):**
+```sh
+RADAR_INGEST_MAX_COST=0 ~/radar-app/.venv/bin/python ~/radar-app/src/ingest.py \
+  --instance ~/radar-instance --all-sources --since "$(date -d '1 day ago' +%F)" --dry-run
+```
+**Echter Lauf + Cron (03:15):**
+```sh
+bash ~/radar-app/deploy/app-ingest.sh          # einmal von Hand prüfen
+(crontab -l; echo "15 3 * * * /bin/sh $HOME/radar-app/deploy/app-ingest.sh >> $HOME/radar-app/logs/ingest.log 2>&1") | crontab -
+```
+Stellschrauben (optional in `.env`): `RADAR_INGEST_MAX_COST` (Deckel $, Default 5),
+`RADAR_INGEST_MAX_ITEMS` (je Quelle, 25), `RADAR_INGEST_DAYS` (Fenster, 1),
+`RADAR_INGEST_MODEL`. Der akkumulierende Pool liegt unter `~/radar-pool/pool.yaml`
+(ausserhalb Git → `~/radar-instance` bleibt für `app-run.sh` sauber). Kosten real
+erfahrungsgemäss ~$0.10–0.30/Nacht (24-h-Fenster = wenige neue Items).
+
 ## 9. Fehlersuche
 
 - **502 im Browser:** Gunicorn läuft nicht → `tail ~/radar-app/logs/error.log`, `app-run.sh` erneut.
