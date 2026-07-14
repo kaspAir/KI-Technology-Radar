@@ -105,6 +105,9 @@ def main() -> int:
         sys.exit(f"Eintrag nicht gefunden: {args.entry}")
     obs = [o for o in collect(inst / "entries", "observations.yaml", "observations")
            if o.get("radar_entry_id") == args.entry]
+    # Chronologisch (älteste zuerst) — so liest sich die Beleg-Linie als Geschichte
+    # des Themas, inkl. der Backfill-Meilensteine (GPT-1 → GPT-2 → GPT-3 → …).
+    obs.sort(key=lambda o: str(o.get("date_published") or ""))
     asses = sorted([a for a in collect(inst / "entries", "assessments.yaml", "assessments")
                     if a.get("radar_entry_id") == args.entry], key=lambda a: a.get("valid_from", ""))
     latest = asses[-1] if asses else {}
