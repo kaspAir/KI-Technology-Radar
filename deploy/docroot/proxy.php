@@ -35,6 +35,10 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, file_get_contents('php://input'));
 }
+// HEAD: nur Header holen, keinen Body erwarten (sonst wartet curl -> 502)
+if ($method === 'HEAD') {
+    curl_setopt($ch, CURLOPT_NOBODY, true);
+}
 
 $response = curl_exec($ch);
 if ($response === false) {
