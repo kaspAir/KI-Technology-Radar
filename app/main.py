@@ -21,6 +21,7 @@ from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
 from .db import (Curation, Profile, Proposal, ROLES, SessionLocal, Tenant, User,
@@ -79,7 +80,10 @@ def _startup():
         with SessionLocal() as s:
             if not s.scalar(select(User).where(User.email == email)):
                 s.add(User(email=email, pw=hash_pw(pw), is_platform_admin=True, tenant_id=None, role="admin"))
-                s.commit()
+                try:
+                    s.commit()
+                except IntegrityError:
+                    s.rollback()   # ein anderer Worker war schneller — ok
 
 
 def db_session():
