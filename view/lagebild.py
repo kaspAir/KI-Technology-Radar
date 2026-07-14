@@ -89,10 +89,29 @@ def main() -> int:
         inst = (Path.cwd() / inst).resolve()
 
     country = load_yaml(inst / "country.yaml") if (inst / "country.yaml").exists() else {}
-    mandant = (country or {}).get("label", "diese Instanz")
+    profil = load_yaml(inst / "mandant.yaml") if (inst / "mandant.yaml").exists() else {}
+    profil = profil or {}
+    mandant = profil.get("name") or (country or {}).get("label", "diese Instanz")
 
     comp_label = {t["id"]: t.get("label", t["id"])
                   for t in collect(CORE / "vocab-core", "competence.yaml", "terms")}
+    domain_label = {t["id"]: t.get("label", t["id"])
+                    for t in collect(CORE / "vocab-core", "domain.yaml", "terms")}
+
+    # Profil steuert die Wertung: Risikofreudigkeit -> welche Ringe als Chance zählen;
+    # Wunschbranchen -> Themen in diesen Domänen ranken höher.
+    risk = str(profil.get("risikofreudigkeit") or "").lower()
+    if any(x in risk for x in ("früh", "fruh", "adoptier", "offensiv")):
+        chancen_rings, ringw = ("Adopt", "Pilot", "Explore"), {"Adopt": 2, "Pilot": 1, "Explore": 0}
+    elif "konservativ" in risk:
+        chancen_rings, ringw = ("Adopt", "Pilot"), {"Adopt": 2, "Pilot": 1}
+    else:  # ausgewogen / kein Profil
+        chancen_rings, ringw = ("Adopt", "Pilot", "Explore"), {"Adopt": 2, "Pilot": 1, "Explore": -1}
+    wunsch = [str(x).lower() for x in (profil.get("wunschbranchen") or [])]
+
+    def wunsch_boost(e):
+        labels = " ".join(domain_label.get(d, d).lower() for d in (e.get("domains") or []))
+        return 3 if any(w and (w in labels or labels and w.split()[0] in labels) for w in wunsch) else 0
 
     entries = {e["id"]: e for e in collect(inst / "entries", "entry.yaml", "entries")}
     asses = collect(inst / "entries", "assessments.yaml", "assessments")
@@ -120,9 +139,9 @@ def main() -> int:
     def relo(a):
         return a.get("relevance_org") or a.get("relevance_general") or 0
 
-    # --- Chancen: reif (Adopt/Pilot) + hoch org-relevant ---
-    chancen = sorted([(e, a, r) for e, a, r in placed if r in ("Adopt", "Pilot") and relg(a) >= 4],
-                     key=lambda t: -relo(t[1]))[:6]
+    # --- Chancen: reif + hoch org-relevant, nach Profil gewichtet ---
+    chancen = sorted([(e, a, r) for e, a, r in placed if r in chancen_rings and relg(a) >= 4],
+                     key=lambda t: -(relo(t[1]) + ringw.get(t[2], 0) + wunsch_boost(t[0])))[:6]
 
     # --- Anbieter-Abhängigkeit (Blast-Radius) ---
     prov_count: dict[str, list] = {}
@@ -213,6 +232,25 @@ def main() -> int:
       + (f'<div><span class="k">Markt-Tendenz</span><b class="warn">Spannung beobachten</b></div>' if bubble else '')
       + '</section>')
 
+    # Mandanten-Profil anzeigen (oder zum Ausfüllen einladen).
+    if profil:
+        def pv(k):
+            v = profil.get(k)
+            return ", ".join(str(x) for x in v) if isinstance(v, list) else (v or "")
+        prows = []
+        for lbl, k in [("Typ", "typ"), ("Schwerpunkte", "schwerpunkte"), ("Wunschbranchen", "wunschbranchen"),
+                       ("Risikofreudigkeit", "risikofreudigkeit"), ("Souveränität", "souveraenitaet"), ("KPIs", "kpis")]:
+            if pv(k):
+                prows.append(f'<div><span class="k">{lbl}</span>{esc(pv(k))}</div>')
+        if prows:
+            w('<h2>Mandanten-Profil <a class="edit" href="profil.html">bearbeiten →</a></h2>')
+            w('<section class="lage prof">' + "".join(prows) + '</section>')
+    else:
+        w('<p class="mut" style="background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:12px 14px">'
+          'Noch <b>kein Mandanten-Profil</b> hinterlegt — im '
+          '<a href="profil.html">Profil-Formular</a> erfassen (Risikofreudigkeit, '
+          'Wunschbranchen, KPIs …), damit Chancen &amp; Empfehlungen auf euch zugeschnitten sind.</p>')
+
     w('<h2>Chancen — worauf jetzt setzen</h2>')
     w('<div class="cards">')
     for e, a, r in chancen:
@@ -270,6 +308,9 @@ def main() -> int:
   .warn{{color:{RED}}}
   .lage{{display:flex;flex-wrap:wrap;gap:12px 26px;background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:14px 16px}}
   .lage b{{font-size:17px}}
+  .prof{{background:#faf7f1}} .prof b{{font-size:14px}}
+  .edit{{font-size:12px;font-weight:400;color:{GOLD};text-decoration:none}}
+  .mut a{{color:{GOLD}}}
   .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}}
   .card{{display:block;background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:12px 14px;text-decoration:none;color:inherit;transition:border-color .12s}}
   .card:hover{{border-color:{GOLD}}}

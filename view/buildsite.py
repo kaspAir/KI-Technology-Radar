@@ -133,6 +133,10 @@ def main() -> int:
     if args.mode == "internal":
         run("lagebild.py", "--instance", str(inst), "--mode", args.mode, "--out", str(out / "lagebild.html"))
 
+    # Mandanten-Profil-Formular (profil.html, Selbstbedienung) — nur intern (E25).
+    if args.mode == "internal":
+        run("profilsite.py", "--instance", str(inst), "--mode", args.mode, "--out", str(out / "profil.html"))
+
     # Detail-Dossier je Eintrag (detail-<slug>.html) — Ziel der Blip-/Karten-Links.
     ids = entry_ids(inst)
     for eid in ids:

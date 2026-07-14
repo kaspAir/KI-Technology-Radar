@@ -257,6 +257,8 @@ def main() -> int:
                  else '<a class="navbtn" href="markt.html">KI-Markt & Anbieter (Tendenzen) →</a>')
     lagebildlink = ('' if args.mode == "public"
                     else '<a class="navbtn primary" href="lagebild.html">📋 Management-Lagebild →</a>')
+    profillink = ('' if args.mode == "public"
+                  else '<a class="navbtn" href="profil.html">🏢 Mandanten-Profil →</a>')
 
     # Länder-Umschalter (A1): navigiert zwischen den Länder-Radaren (je Land eine Instanz).
     cur_code = (country or {}).get("code")
@@ -594,7 +596,7 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
 {country_sel} {tsel} {bran_sel} {prov_sel}
-<div class="navbtns">{lagebildlink}<a class="navbtn" href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}{marktlink}</div>
+<div class="navbtns">{lagebildlink}{profillink}<a class="navbtn" href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}{marktlink}</div>
 <div class="viewtoggle">
 <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
 <button class="vbtn" data-v="columns" onclick="setView('columns')">▤ Sektor-Spalten</button></div>
