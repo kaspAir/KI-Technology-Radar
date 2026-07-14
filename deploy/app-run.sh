@@ -34,7 +34,17 @@ elif git clone -q -b "$BRANCH" "$INST_URL" "$RADAR_INSTANCE" 2>/dev/null; then :
   echo "Hinweis: Instanz nicht klonbar (kein Key?) — Grundstock später per Admin-Button."; fi
 
 # ---- Python-Umgebung ----------------------------------------------------------
-if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; .venv/bin/pip install -q --upgrade pip; fi
+# Managed Hosting: `python3 -m venv` kann oft kein pip bootstrappen (ensurepip fehlt)
+# -> virtualenv bevorzugen (bringt pip mit, wie beim Dashboard). Fallback: venv.
+if [ ! -x .venv/bin/pip ]; then
+  rm -rf .venv
+  if python3 -m virtualenv --version >/dev/null 2>&1; then
+    python3 -m virtualenv .venv
+  else
+    python3 -m venv .venv
+  fi
+  .venv/bin/python -m pip install -q --upgrade pip
+fi
 .venv/bin/pip install -q -r app/requirements.txt
 
 # ---- DB init + Grundstock/Pool seeden (idempotent) ----------------------------
