@@ -10,6 +10,7 @@ Umgebung: RADAR_DB, RADAR_SECRET, RADAR_INSTANCE, RADAR_ADMIN_EMAIL/PW (Bootstra
 """
 from __future__ import annotations
 
+import html as _html
 import json
 import os
 import re
@@ -254,6 +255,38 @@ def _nav(user, db):
     """Kontext für die Navigation (Rolle/Mandant)."""
     tenant = db.get(Tenant, user.tenant_id) if user and user.tenant_id else None
     return {"user": user, "tenant": tenant, "can_edit": can_edit(user), "can_manage": can_manage(user)}
+
+
+def _inject_topbar(doc: str, nav: dict) -> str:
+    """Fügt den (sticky) MVP-Menübalken in ein eigenständiges HTML-Dokument ein
+    (Lagebild/Markt werden nicht über base.html gerendert)."""
+    user, tenant = nav.get("user"), nav.get("tenant")
+    if not user:
+        return doc
+    a = 'style="color:#23262D;text-decoration:none;font-size:14px"'
+    links = [("/proposals", "Vorschläge"), ("/radar", "Mein Radar"), ("/profil", "Profil"),
+             ("/lagebild", "Lagebild"), ("/markt", "Markt")]
+    if nav.get("can_manage"):
+        links.append(("/team", "Team"))
+    items = "".join(f'<a href="{h}" {a}>{_html.escape(t)}</a>' for h, t in links)
+    who = (f'<span style="font-size:12px;color:#8a867e">{_html.escape(tenant.name)} · '
+           f'{_html.escape(user.role)}</span>') if tenant else ""
+    bar = (
+        '<header style="position:sticky;top:0;z-index:50;width:100vw;margin-left:calc(50% - 50vw);'
+        'box-sizing:border-box;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;'
+        'padding:12px 24px;background:#fff;border-bottom:1px solid #e7e3da;margin-bottom:22px;'
+        'font-family:system-ui,-apple-system,sans-serif">'
+        '<span style="font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:#C0851F;'
+        'font-weight:600">Aletheia · Radar</span>'
+        '<nav style="margin-left:auto;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">'
+        + items + who
+        + f'<span style="font-size:12px;color:#8a867e">{_html.escape(user.email)}</span>'
+        f'<a href="/passwort" {a}>Passwort</a><a href="/logout" {a}>Abmelden</a></nav></header>')
+    doc = doc.replace('</head>', '<style>body{padding-top:0 !important}</style></head>', 1)
+    m = re.search(r'<body[^>]*>', doc)
+    if m:
+        doc = doc[:m.end()] + bar + doc[m.end():]
+    return doc
 
 
 # --- Plattform-Admin: Mandanten verwalten -----------------------------------
@@ -597,7 +630,7 @@ def lagebild_view(request: Request, user=Depends(current_user), db=Depends(db_se
     except Exception as e:
         html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
                 f"<p>Lagebild derzeit nicht verfügbar: {e}</p><p><a href='/profil'>← Profil</a></p></div>")
-    return HTMLResponse(html)
+    return HTMLResponse(_inject_topbar(html, _nav(user, db)))
 
 
 @app.get("/markt", response_class=HTMLResponse)
@@ -618,4 +651,4 @@ def markt_view(request: Request, user=Depends(current_user), db=Depends(db_sessi
     except Exception as e:
         html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
                 f"<p>Marktsicht derzeit nicht verfügbar: {e}</p><p><a href='/radar'>← Radar</a></p></div>")
-    return HTMLResponse(html)
+    return HTMLResponse(_inject_topbar(html, _nav(user, db)))
