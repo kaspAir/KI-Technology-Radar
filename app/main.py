@@ -593,7 +593,7 @@ def radar(request: Request, as_of: str = "", user=Depends(current_user), db=Depe
         if sec not in sector_ids:
             sec = fallback
         themes.append({"id": str(prop.id), "name": prop.title, "ring": d["ring"],
-                       "sector": sec, "href": "#", "dom": prop.branchen or "",
+                       "sector": sec, "href": f"/thema/{prop.id}", "dom": prop.branchen or "",
                        "prov": prop.providers or "", "dep": prop.provider_dependency or ""})
         for br in (prop.branchen or "").split():
             dom_count[br] = dom_count.get(br, 0) + 1
@@ -694,6 +694,33 @@ def lagebild_view(request: Request, user=Depends(current_user), db=Depends(db_se
         html = ("<div style='max-width:720px;margin:40px auto;font-family:system-ui'>"
                 f"<p>Lagebild derzeit nicht verfügbar: {e}</p><p><a href='/profil'>← Profil</a></p></div>")
     return HTMLResponse(_inject_topbar(html, _nav(user, db)))
+
+
+@app.get("/thema/{pid}", response_class=HTMLResponse)
+def thema(request: Request, pid: int, user=Depends(current_user), db=Depends(db_session)):
+    """Beschreibungs-Seite eines Blips: volles Dossier für Grundstock-Einträge
+    (aus der Instanz), schlanke Detailseite für aufgenommene Pool-Vorschläge."""
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    p = db.get(Proposal, pid)
+    if not p:
+        return HTMLResponse("<p>Thema nicht gefunden.</p>", status_code=404)
+    if p.url.startswith("entry:"):
+        import sys as _sys
+        if str(CORE_VIEW) not in _sys.path:
+            _sys.path.insert(0, str(CORE_VIEW))
+        try:
+            from detail import render_detail
+            doc = render_detail(INSTANCE, p.url[len("entry:"):], internal=True)
+        except Exception:
+            doc = None
+        if doc:
+            doc = doc.replace('href="index.html"', 'href="/radar"')
+            doc = re.sub(r'href="detail[a-z]*-[^"]*\.html"', 'href="#" onclick="return false"', doc)
+            return HTMLResponse(_inject_topbar(doc, _nav(user, db)))
+    return templates.TemplateResponse(request, "thema.html", {**_nav(user, db), "active": "radar", "p": p})
 
 
 @app.get("/markt", response_class=HTMLResponse)

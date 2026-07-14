@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% set active='radar' %}{% block title %}{{ p.title }} — KI-Radar{% endblock %}
+{% block body %}
+<p><a href="/radar" style="color:var(--gold);text-decoration:none">← Mein Radar</a></p>
+<h1>{{ p.title }}</h1>
+<p class="sub">{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}
+  {% if p.relevance_general %}<span class="rel">Relevanz {{ p.relevance_general }}</span>{% endif %}</p>
+{% if p.summary %}<div class="card"><p class="sum">{{ p.summary }}</p></div>{% endif %}
+{% if p.citation %}<p class="muted" style="overflow-wrap:anywhere">{{ p.citation }}</p>{% endif %}
+{% if p.url and not p.url.startswith('entry:') %}
+<p><a class="art" href="{{ p.url }}" target="_blank" rel="noopener">Artikel ↗</a></p>
+{% endif %}
+<p class="muted" style="margin-top:18px">Ein aus den Vorschlägen aufgenommener Beleg. Ein volles
+Dossier (Chancen/Risiken, historischer Vergleich, Beobachtungs-Linie) entsteht erst, wenn daraus
+ein <b>ratifizierter</b> Radar-Eintrag wird.</p>
+{% endblock %}

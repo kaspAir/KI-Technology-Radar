@@ -71,18 +71,9 @@ def top_area(a: str) -> str:
     return ".".join(parts[:2]) if len(parts) >= 2 else a
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Detail-Dossier je Eintrag.")
-    ap.add_argument("--instance", required=True)
-    ap.add_argument("--entry", required=True)
-    ap.add_argument("--mode", choices=["internal", "public"], default="internal")
-    ap.add_argument("--out", required=True)
-    args = ap.parse_args()
-    inst = Path(args.instance)
-    if not inst.is_absolute():
-        inst = (Path.cwd() / inst).resolve()
-    internal = args.mode != "public"
-
+def render_detail(inst: Path, entry_id: str, internal: bool = True):
+    """Eintrags-Dossier als HTML-Dokument (wiederverwendbar: statischer Build + MVP).
+    Rückgabe: HTML-String, oder None wenn der Eintrag nicht existiert."""
     labels = {}
     for f in ("area", "domain", "competence", "method", "tech-tag"):
         for t in collect(CORE / "vocab-core", f"{f}.yaml", "terms"):
@@ -100,16 +91,16 @@ def main() -> int:
         return f'<a href="{esc(href)}" target="_blank" rel="noopener">{name}</a>' if href else name
 
     entries = {e["id"]: e for e in collect(inst / "entries", "entry.yaml", "entries")}
-    entry = entries.get(args.entry)
+    entry = entries.get(entry_id)
     if not entry:
-        sys.exit(f"Eintrag nicht gefunden: {args.entry}")
+        return None
     obs = [o for o in collect(inst / "entries", "observations.yaml", "observations")
-           if o.get("radar_entry_id") == args.entry]
+           if o.get("radar_entry_id") == entry_id]
     # Chronologisch (älteste zuerst) — so liest sich die Beleg-Linie als Geschichte
     # des Themas, inkl. der Backfill-Meilensteine (GPT-1 → GPT-2 → GPT-3 → …).
     obs.sort(key=lambda o: str(o.get("date_published") or ""))
     asses = sorted([a for a in collect(inst / "entries", "assessments.yaml", "assessments")
-                    if a.get("radar_entry_id") == args.entry], key=lambda a: a.get("valid_from", ""))
+                    if a.get("radar_entry_id") == entry_id], key=lambda a: a.get("valid_from", ""))
     latest = asses[-1] if asses else {}
 
     def chips(ids):
@@ -251,7 +242,22 @@ def main() -> int:
 {''.join(out)}
 <p class="note">{mode_note}. Erzeugt aus der Instanz mit view/detail.py — read-only.</p>
 </div></body></html>"""
+    return doc
 
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Detail-Dossier je Eintrag.")
+    ap.add_argument("--instance", required=True)
+    ap.add_argument("--entry", required=True)
+    ap.add_argument("--mode", choices=["internal", "public"], default="internal")
+    ap.add_argument("--out", required=True)
+    args = ap.parse_args()
+    inst = Path(args.instance)
+    if not inst.is_absolute():
+        inst = (Path.cwd() / inst).resolve()
+    doc = render_detail(inst, args.entry, internal=args.mode != "public")
+    if doc is None:
+        sys.exit(f"Eintrag nicht gefunden: {args.entry}")
     o = Path(args.out)
     if not o.is_absolute():
         o = (Path.cwd() / o).resolve()

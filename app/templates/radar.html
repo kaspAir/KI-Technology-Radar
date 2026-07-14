@@ -86,8 +86,9 @@
             {% elif d.base_ring %}<span class="chip" style="border-color:#2e7d32;color:#2e7d32">angepasst · Referenz {{ d.base_ring }}</span>
             {% else %}<span class="chip">eigen</span>{% endif %}</div>
           <div style="font-size:15px;font-weight:600;margin:4px 0 2px">
-            {% if p.url and not p.url.startswith('entry:') %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
+            <a href="/thema/{{ p.id }}" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a></div>
           {% if p.summary %}<p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>{% endif %}
+          {% if p.url and not p.url.startswith('entry:') %}<a class="art" href="{{ p.url }}" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:none;font-size:12px">Artikel ↗</a>{% endif %}
         </div>
         {% if can_edit and not historical %}
         <div style="display:flex;flex-direction:column;gap:6px;white-space:nowrap;align-items:stretch">
