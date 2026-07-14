@@ -29,6 +29,7 @@
     {% if can_edit %}
     <form method="post" action="/add" style="display:flex;flex-direction:column;gap:6px;white-space:nowrap">
       <input type="hidden" name="proposal_id" value="{{ p.id }}">
+      <input type="hidden" name="b" value="{{ sel }}">
       <select name="ring">{% for r in rings %}<option value="{{ r }}" {{ 'selected' if r=='Watch' }}>{{ r }}</option>{% endfor %}</select>
       <button type="submit">auf mein Radar</button>
     </form>

@@ -15,6 +15,7 @@ import os
 import re
 import secrets
 from pathlib import Path
+from urllib.parse import quote
 
 import yaml
 from fastapi import Depends, FastAPI, Form, Request
@@ -397,14 +398,15 @@ def proposals(request: Request, b: str = "", user=Depends(current_user), db=Depe
 
 @app.post("/add")
 def add(request: Request, proposal_id: int = Form(...), ring: str = Form("Watch"),
-        user=Depends(current_user), db=Depends(db_session)):
+        b: str = Form(""), user=Depends(current_user), db=Depends(db_session)):
+    target = "/proposals" + (f"?b={quote(b)}" if b else "")   # Branchen-Filter behalten
     if not can_edit(user) or not user.tenant_id:
-        return RedirectResponse("/proposals", 303)
+        return RedirectResponse(target, 303)
     if ring not in RINGS:
         ring = "Watch"
     if not db.scalar(select(Curation).where(Curation.tenant_id == user.tenant_id, Curation.proposal_id == proposal_id)):
         db.add(Curation(tenant_id=user.tenant_id, proposal_id=proposal_id, ring=ring)); db.commit()
-    return RedirectResponse("/proposals", 303)
+    return RedirectResponse(target, 303)
 
 
 @app.post("/remove")
