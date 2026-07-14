@@ -177,6 +177,8 @@ def main() -> int:
             theme_rows.append({
                 "id": slug, "name": e.get("name"), "ring": ring, "sector": aid,
                 "href": f"detail-{slug}.html", "dom": dom_data(e),
+                "prov": " ".join(e.get("providers") or []),
+                "dep": e.get("provider_dependency") or "",
             })
     sectors_json = [{"id": aid, "label": area_label.get(aid, aid),
                      "angle": sector_center[aid]} for aid in areas]
@@ -297,6 +299,22 @@ def main() -> int:
         bran_sel = ('<label class="jur">Branche&nbsp;<select id="bran" onchange="branf()">'
                     + "".join(bopts) + "</select></label>")
 
+    # Anbieter-Abhängigkeit (Blast-Radius): Umschalter über die vorkommenden Anbieter.
+    present_prov: dict[str, int] = {}
+    for e, *_ in placed:
+        for pr in (e.get("providers") or []):
+            present_prov[pr] = present_prov.get(pr, 0) + 1
+    prov_sel = ""
+    if present_prov:
+        plabel = {"openai": "OpenAI", "anthropic": "Anthropic", "google": "Google",
+                  "microsoft": "Microsoft", "meta": "Meta", "deepseek": "DeepSeek",
+                  "nvidia": "Nvidia", "open": "Offen (Hedge)"}
+        popts = ['<option value="">Anbieter-Abhängigkeit …</option>']
+        for pr in sorted(present_prov, key=lambda x: -present_prov[x]):
+            popts.append(f'<option value="{esc(pr)}">{esc(plabel.get(pr, pr))} ({present_prov[pr]})</option>')
+        prov_sel = ('<label class="jur">Blast-Radius&nbsp;<select id="prov" onchange="renderRadarArea()">'
+                    + "".join(popts) + "</select></label>")
+
     rej = ""
     if rejected:
         names = ", ".join(
@@ -413,7 +431,7 @@ function renderColumns(byRing){
     SECTORS.forEach(function(sec){
       var st=ts.filter(function(t){return t.sector===sec.id;});
       h+='<div class="rpcol"><div class="rpcolh">'+esc(sec.label)+'</div>';
-      st.forEach(function(t){h+='<a class="chip" href="'+t.href+'">'+esc(t.name)+'</a>';});
+      st.forEach(function(t){var c='chip';if(selProv)c+=provHit(t)?' hl':' dim';h+='<a class="'+c+'" href="'+t.href+'">'+esc(t.name)+'</a>';});
       if(!st.length)h+='<div class="rpempty">–</div>';
       h+='</div>';
     });
@@ -449,7 +467,8 @@ function miniRadar(ts){
   s.push('<circle cx="'+cx+'" cy="'+cy+'" r="2.5" fill="'+INK+'" fill-opacity="0.5"/>');
   pts.forEach(function(p){
     var bx=cx+p.br*p.cos,by=cy+p.dy,lx=p.right?(cx+R+14):(cx-R-14),ly=cy+p.ly,el=p.right?(cx+R+6):(cx-R-6);
-    s.push('<a href="'+p.t.href+'" class="mblip"><polyline points="'+bx.toFixed(1)+','+by.toFixed(1)+' '+el.toFixed(1)+','+ly.toFixed(1)+' '+lx.toFixed(1)+','+ly.toFixed(1)+'" fill="none" stroke="'+INK+'" stroke-opacity="0.22"/><circle cx="'+bx.toFixed(1)+'" cy="'+by.toFixed(1)+'" r="4.5" fill="'+GOLD+'"/><text x="'+lx.toFixed(1)+'" y="'+(ly+3).toFixed(1)+'" text-anchor="'+(p.right?'start':'end')+'" font-size="11" fill="'+INK+'">'+esc(p.t.name)+'</text></a>');
+    var hit=provHit(p.t), op=selProv?(hit?'1':'0.25'):'1', col=hit?'#C0362C':GOLD, fw=hit?'700':'500', rr=hit?'6':'4.5';
+    s.push('<a href="'+p.t.href+'" class="mblip" style="opacity:'+op+'"><polyline points="'+bx.toFixed(1)+','+by.toFixed(1)+' '+el.toFixed(1)+','+ly.toFixed(1)+' '+lx.toFixed(1)+','+ly.toFixed(1)+'" fill="none" stroke="'+INK+'" stroke-opacity="0.22"/><circle cx="'+bx.toFixed(1)+'" cy="'+by.toFixed(1)+'" r="'+rr+'" fill="'+col+'"/><text x="'+lx.toFixed(1)+'" y="'+(ly+3).toFixed(1)+'" text-anchor="'+(p.right?'start':'end')+'" font-size="11" font-weight="'+fw+'" fill="'+INK+'">'+esc(p.t.name)+'</text></a>');
   });
   s.push('</svg>');return s.join('');
 }
@@ -464,11 +483,20 @@ function renderRadar(byRing){
   return any?h:'<p class="rpnone">Keine Themen für diese Branche.</p>';
 }
 
+var selProv='';
+var PLABEL={openai:'OpenAI',anthropic:'Anthropic',google:'Google',microsoft:'Microsoft',meta:'Meta',deepseek:'DeepSeek',nvidia:'Nvidia',open:'Offen (Hedge)'};
+function provHit(t){return !!(selProv&&((' '+(t.prov||'')+' ').indexOf(' '+selProv+' ')>=0));}
 function renderRadarArea(){
   var f=curFilter(),mode=localStorage.getItem('radarview')||'radar';
-  var byRing=byRingOf(THEMES.filter(function(t){return matches(t,f);}));
+  selProv=(document.getElementById('prov')||{}).value||'';
+  var vis=THEMES.filter(function(t){return matches(t,f);});
+  var byRing=byRingOf(vis);
   var el=document.getElementById('radararea');
-  if(el)el.innerHTML=(mode==='columns')?renderColumns(byRing):renderRadar(byRing);
+  if(!el)return;
+  var banner='';
+  if(selProv){var n=vis.filter(provHit).length;
+    banner='<p class="provnote">Wenn <b>'+(PLABEL[selProv]||selProv)+'</b> wackelt: <b>'+n+'</b> '+(n===1?'Thema':'Themen')+' betroffen (hervorgehoben). Offene/lokale Modelle sind der Hedge.</p>';}
+  el.innerHTML=banner+((mode==='columns')?renderColumns(byRing):renderRadar(byRing));
   document.querySelectorAll('.vbtn').forEach(function(b){b.className='vbtn'+(b.getAttribute('data-v')===mode?' on':'');});
 }
 function setView(m){localStorage.setItem('radarview',m);renderRadarArea();}
@@ -546,6 +574,9 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
   .mblip{{cursor:pointer}}
   .mblip:hover text{{fill:{GOLD}}}
   .rpnone{{color:#8a867e;font-size:14px;padding:8px 2px}}
+  .provnote{{background:#fff;border:1px solid #C0362C;border-radius:10px;padding:9px 13px;margin:0 0 12px;font-size:13.5px;color:{INK}}}
+  .chip.hl{{border-color:#C0362C;color:#C0362C;box-shadow:inset 0 0 0 1px #C0362C}}
+  .chip.dim{{opacity:0.4}}
   .seclegend{{font-size:11px;color:#8a867e;margin:9px 0 0;padding-top:9px;border-top:1px solid #eee7db;line-height:1.5}}
   .seclegend b{{color:{INK}}}
   @media(max-width:560px){{.rpcols{{grid-template-columns:repeat(2,1fr)}}}}
@@ -553,7 +584,7 @@ document.addEventListener('DOMContentLoaded',renderRadarArea);
 <p class="sig">Aletheia · Radar</p>
 <h1>KI-Technology-Radar</h1>
 <p class="sub">{stand} · {len(placed)} Einträge</p>
-{country_sel} {tsel} {bran_sel}
+{country_sel} {tsel} {bran_sel} {prov_sel}
 <p class="berichtlink"><a href="bericht.html">Berichte — Zeitraum frei wählbar →</a>{kandlink}</p>
 <div class="viewtoggle">
 <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>

@@ -44,5 +44,16 @@ properties:
     description: "wann die Einschätzung erneut geprüft werden sollte (E22)"
     type: [string, "null"]
     format: date
+  providers:
+    description: >-
+      Anbieter, von denen dieses Thema praktisch abhängt (Abhängigkeits-Linse /
+      Blast-Radius). Freie Slugs, z.B. openai, anthropic, google, microsoft, meta,
+      deepseek, open (= offen/kein einzelner Anbieter = Hedge).
+    type: array
+    items: {type: string, pattern: "^[a-z0-9-]+$"}
+  provider_dependency:
+    description: "Wie stark das Thema an (wenigen) Anbietern hängt."
+    type: [string, "null"]
+    enum: [high, medium, low, none, null]
   status:
     enum: [active, archived]

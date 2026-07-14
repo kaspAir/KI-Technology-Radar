@@ -194,6 +194,15 @@ def main() -> int:
         w(f'<p><span class="k">Methoden</span> {chips(entry.get("methods"))}</p>')
     if entry.get("tech_tags"):
         w(f'<p><span class="k">Tech-Tags</span> {chips(entry.get("tech_tags"))}</p>')
+    if entry.get("provider_dependency") or entry.get("providers"):
+        _dl = {"high": "hoch", "medium": "mittel", "low": "gering", "none": "keine"}
+        _pl = {"openai": "OpenAI", "anthropic": "Anthropic", "google": "Google",
+               "microsoft": "Microsoft", "meta": "Meta", "deepseek": "DeepSeek",
+               "nvidia": "Nvidia", "open": "Offen (Hedge)"}
+        _provs = ", ".join(_pl.get(x, x) for x in (entry.get("providers") or [])) or "—"
+        w(f'<p><span class="k">Anbieter-Abhängigkeit</span> '
+          f'<b>{esc(_dl.get(entry.get("provider_dependency"), "—"))}</b> — {esc(_provs)} '
+          f'<span class="meta">(Blast-Radius: fällt der Anbieter aus, ist dieses Thema betroffen)</span></p>')
 
     mode_note = ("Öffentliche Ansicht (Allowlist, E26)" if not internal
                  else "Interne Ansicht — enthält private Wertung (E25)")
