@@ -27,10 +27,10 @@
   @media(max-width:560px){ #radararea .rpcols{grid-template-columns:repeat(2,1fr)}}
 </style>
 <h1>Mein Radar</h1>
-<p class="sub">Deine kuratierte Sicht — {{ n }} Einträge. Aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> aufgenommen; jederzeit anpassbar.</p>
+<p class="sub">Deine Sicht — {{ n }} Einträge{% if n_ref %} ({{ n_ref }} aus dem geerbten Referenz-Grundstock ab 2017, {{ n_own }} eigene){% endif %}. Grundstock zentral gepflegt; eigene Aufnahmen aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a>.</p>
 
 {% if n == 0 %}
-  <div class="card"><p class="sum">Noch leer. Geh zu den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> und nimm auf, was dich interessiert.</p></div>
+  <div class="card"><p class="sum">Noch leer — es ist auch kein Referenz-Grundstock hinterlegt. Der Plattform-Admin liest ihn unter <b>Mandanten</b> einmalig ein; danach nimmst du aus den <a href="/proposals" style="color:var(--gold)">Vorschlägen</a> Eigenes dazu.</p></div>
 {% else %}
   <div class="viewtoggle">
     <button class="vbtn on" data-v="radar" onclick="setView('radar')">◎ Ring-Radare</button>
@@ -43,18 +43,19 @@
     {% set group = by_ring.get(r) %}
     {% if group %}
     <div class="ringhead">{{ r }} <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· {{ group|length }}</span></div>
-    {% for cur, p in group %}
+    {% for p, ring, origin in group %}
     <article class="card">
       <div class="row">
         <div class="grow">
-          <div>{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}</div>
+          <div>{% for br in p.branchen.split() %}<span class="chip">{{ br }}</span>{% endfor %}
+            {% if origin != 'own' %}<span class="chip" style="border-color:var(--gold);color:var(--gold)">geerbt · Referenz</span>{% endif %}</div>
           <div style="font-size:15px;font-weight:600;margin:4px 0 2px">
-            {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
-          <p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>
+            {% if p.url and not p.url.startswith('entry:') %}<a href="{{ p.url }}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:2px solid rgba(192,133,31,.4)">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</div>
+          {% if p.summary %}<p class="sum">{{ p.summary[:220] }}{% if p.summary|length > 220 %}…{% endif %}</p>{% endif %}
         </div>
-        {% if can_edit %}
+        {% if can_edit and origin == 'own' %}
         <form method="post" action="/remove">
-          <input type="hidden" name="curation_id" value="{{ cur.id }}">
+          <input type="hidden" name="proposal_id" value="{{ p.id }}">
           <button type="submit" class="ghost">entfernen</button>
         </form>
         {% endif %}

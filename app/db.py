@@ -34,11 +34,16 @@ class Base(DeclarativeBase):
 
 
 class Tenant(Base):
-    """Mandant/Organisation. parent_id=NULL -> oberster Mandant; sonst Untermandant."""
+    """Mandant/Organisation. parent_id=NULL -> oberster Mandant; sonst Untermandant.
+
+    is_reference=True markiert den EINEN geteilten Referenz-Radar (Grundstock ab 2017),
+    den alle Mandanten erben (E24: zentral gepflegt, pro Mandant überschreibbar).
+    """
     __tablename__ = "tenants"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    is_reference: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
     children = relationship("Tenant", backref="parent", remote_side=[id])
 
@@ -88,5 +93,32 @@ class Profile(Base):
     updated: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+def _ensure_columns() -> None:
+    """Leichte Dev-Migration (nur SQLite): fehlende Spalten per ALTER TABLE ergänzen,
+    damit ein Schema-Zuwachs die bestehende radar.db nicht unbrauchbar macht.
+    Produktion (MariaDB) bekommt später echte Migrationen (Alembic)."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    _sqlite_type = {"INTEGER": "INTEGER", "BOOLEAN": "BOOLEAN", "VARCHAR": "VARCHAR",
+                    "TEXT": "TEXT", "DATETIME": "DATETIME"}
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            have = {c["name"] for c in insp.get_columns(table.name)} if insp.has_table(table.name) else set()
+            if not have:
+                continue
+            for col in table.columns:
+                if col.name in have:
+                    continue
+                ctype = _sqlite_type.get(col.type.__class__.__name__.upper(), "VARCHAR")
+                default = "0" if ctype in ("INTEGER", "BOOLEAN") else ("''" if ctype in ("VARCHAR", "TEXT") else None)
+                ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ctype}'
+                if default is not None:
+                    ddl += f" DEFAULT {default}"
+                conn.execute(text(ddl))
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    _ensure_columns()

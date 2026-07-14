@@ -3,8 +3,24 @@
 <h1>Mandanten</h1>
 <p class="sub">Plattform-Verwaltung: Organisationen (Mandanten) anlegen. Jeder Mandant
 erhält einen ersten <b>Admin</b>, der dann eigene Nutzer und Untermandanten anlegt.</p>
-{% if request.query_params.get('ok') %}<div class="card" style="border-left:3px solid #2e7d32">✓ Mandant angelegt.</div>{% endif %}
-{% if request.query_params.get('err') %}<div class="err">Bitte prüfen: Name nötig, E-Mail eindeutig, Passwort ≥ 8 Zeichen.</div>{% endif %}
+{% set ok = request.query_params.get('ok') %}{% set err = request.query_params.get('err') %}
+{% if ok=='1' %}<div class="card" style="border-left:3px solid #2e7d32">✓ Mandant angelegt.</div>{% endif %}
+{% if ok=='ref' %}<div class="card" style="border-left:3px solid #2e7d32">✓ Referenz-Grundstock eingelesen.</div>{% endif %}
+{% if ok=='pool' %}<div class="card" style="border-left:3px solid #2e7d32">✓ Vorschläge-Pool eingelesen.</div>{% endif %}
+{% if err=='ref' %}<div class="err">Grundstock-Import fehlgeschlagen — Instanz-Pfad (RADAR_INSTANCE) prüfen.</div>{% endif %}
+{% if err=='pool' %}<div class="err">Pool-Import fehlgeschlagen — inbox/pool.yaml in der Instanz prüfen.</div>{% endif %}
+{% if err and err not in ('ref','pool') %}<div class="err">Bitte prüfen: Name nötig, E-Mail eindeutig, Passwort ≥ 8 Zeichen.</div>{% endif %}
+
+<div class="card">
+  <b>Gemeinsame Datenbasis</b>
+  <div class="muted" style="margin:6px 0 10px">Referenz-Grundstock (ab 2017) und Vorschläge-Pool gelten für <b>alle</b> Mandanten. Jeder neue Mandant erbt den Grundstock automatisch und kann ihn eigenständig anpassen.</div>
+  <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+    <form method="post" action="/admin/seed-reference"><button type="submit">Referenz-Grundstock einlesen</button></form>
+    <span class="muted">{{ n_ref }} Referenz-Blips</span>
+    <form method="post" action="/admin/seed-pool" style="margin-left:14px"><button type="submit" class="ghost">Vorschläge-Pool einlesen</button></form>
+    <span class="muted">{{ n_pool }} Vorschläge</span>
+  </div>
+</div>
 
 <h2 style="font-size:16px;color:var(--gold);margin:20px 0 6px">Bestehende Mandanten</h2>
 {% set tops = tenants|selectattr('parent_id','none')|list %}

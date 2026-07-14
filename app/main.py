@@ -20,7 +20,7 @@ import yaml
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
 
 from .db import (Curation, Profile, Proposal, ROLES, SessionLocal, Tenant, User,
@@ -28,6 +28,7 @@ from .db import (Curation, Profile, Proposal, ROLES, SessionLocal, Tenant, User,
 from .security import hash_pw, verify_pw
 
 RINGS = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
+HIDDEN = "—"  # Sentinel-Ring: ein Mandant blendet einen geerbten Blip aus
 BASE = Path(__file__).resolve().parent
 CORE_VIEW = BASE.parent / "view"
 INSTANCE = Path(os.environ.get("RADAR_INSTANCE", str(BASE.parent.parent / "KI-Technology-Radar-Instanz")))
@@ -114,6 +115,36 @@ def effective_profile(db, tenant_id) -> dict:
     return merged
 
 
+def reference_tenant_id(db):
+    return db.scalar(select(Tenant.id).where(Tenant.is_reference == True))  # noqa: E712
+
+
+def effective_curation(db, tenant_id):
+    """Effektive Kuratierung eines Mandanten = Referenz-Grundstock ⊕ Eltern-Kette ⊕
+    eigene Wertung. Nähere Schicht überschreibt per proposal_id; Ring '—' blendet aus.
+    Rückgabe: Liste (Proposal, ring, origin) mit origin in reference|inherited|own."""
+    layers = []  # (origin, tenant_id), von entfernt nach nah
+    ref = reference_tenant_id(db)
+    if ref and ref != tenant_id:
+        layers.append(("reference", ref))
+    chain = tenant_chain(db, tenant_id)          # Wurzel .. self
+    for t in chain[:-1]:                          # Eltern (ohne self)
+        layers.append(("inherited", t.id))
+    layers.append(("own", tenant_id))
+    merged = {}                                   # proposal_id -> (ring, origin)
+    for origin, tid in layers:
+        for cur in db.scalars(select(Curation).where(Curation.tenant_id == tid)):
+            merged[cur.proposal_id] = (cur.ring, origin)
+    pids = [pid for pid, (ring, _) in merged.items() if ring != HIDDEN]
+    props = {p.id: p for p in db.scalars(select(Proposal).where(Proposal.id.in_(pids)))} if pids else {}
+    out = []
+    for pid, (ring, origin) in merged.items():
+        p = props.get(pid)
+        if p and ring != HIDDEN:
+            out.append((p, ring, origin))
+    return out
+
+
 # --- Auth -------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def root(request: Request, user=Depends(current_user)):
@@ -180,13 +211,19 @@ def admin(request: Request, user=Depends(current_user), db=Depends(db_session)):
         return RedirectResponse("/login", 302)
     if not user.is_platform_admin:
         return RedirectResponse("/radar", 302)
-    tenants = db.scalars(select(Tenant).order_by(Tenant.parent_id.is_(None).desc(), Tenant.name)).all()
+    tenants = [t for t in db.scalars(select(Tenant).order_by(
+        Tenant.parent_id.is_(None).desc(), Tenant.name)).all() if not t.is_reference]
     users = db.scalars(select(User)).all()
     ucount = {}
     for u in users:
         ucount[u.tenant_id] = ucount.get(u.tenant_id, 0) + 1
+    ref_id = reference_tenant_id(db)
+    n_ref = db.scalar(select(func.count()).select_from(Curation).where(
+        Curation.tenant_id == ref_id)) if ref_id else 0
+    n_pool = db.scalar(select(func.count()).select_from(Proposal)) or 0
     return templates.TemplateResponse(request, "admin.html",
-        {**_nav(user, db), "active": "admin", "tenants": tenants, "ucount": ucount})
+        {**_nav(user, db), "active": "admin", "tenants": tenants, "ucount": ucount,
+         "n_ref": n_ref or 0, "n_pool": n_pool})
 
 
 @app.post("/admin/tenant")
@@ -205,6 +242,35 @@ def admin_create_tenant(request: Request, name: str = Form(...), admin_email: st
     db.add(User(email=admin_email, pw=hash_pw(admin_pw), tenant_id=t.id, role="admin"))
     db.commit()
     return RedirectResponse("/admin?ok=1", 303)
+
+
+@app.post("/admin/seed-reference")
+def admin_seed_reference(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Referenz-Grundstock (Einträge ab 2017) aus der Instanz einlesen — erbt jeder Mandant."""
+    if not user or not user.is_platform_admin:
+        return RedirectResponse("/login", 302)
+    from .seed_reference import run as seed_ref
+    try:
+        seed_ref(str(INSTANCE))
+        return RedirectResponse("/admin?ok=ref", 303)
+    except Exception:
+        return RedirectResponse("/admin?err=ref", 303)
+
+
+@app.post("/admin/seed-pool")
+def admin_seed_pool(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Geteilten Vorschläge-Pool aus der Instanz-pool.yaml einlesen."""
+    if not user or not user.is_platform_admin:
+        return RedirectResponse("/login", 302)
+    from .seed import run as seed_pool
+    pool = INSTANCE / "inbox" / "pool.yaml"
+    if not pool.exists():
+        return RedirectResponse("/admin?err=pool", 303)
+    try:
+        seed_pool(str(pool))
+        return RedirectResponse("/admin?ok=pool", 303)
+    except Exception:
+        return RedirectResponse("/admin?err=pool", 303)
 
 
 # --- Mandanten-Admin: Team + Untermandanten ---------------------------------
@@ -269,7 +335,7 @@ def proposals(request: Request, b: str = "", user=Depends(current_user), db=Depe
         return RedirectResponse("/login", 302)
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
-    mine = {c.proposal_id for c in db.scalars(select(Curation).where(Curation.tenant_id == user.tenant_id))}
+    mine = {p.id for p, _r, _o in effective_curation(db, user.tenant_id)}
     rows = db.scalars(select(Proposal).order_by(Proposal.relevance_general.desc(), Proposal.id.desc())).all()
     open_rows = [p for p in rows if p.id not in mine and (not b or b in p.branchen.split())]
     branchen = sorted({x for p in rows if p.id not in mine for x in p.branchen.split() if x})
@@ -291,11 +357,13 @@ def add(request: Request, proposal_id: int = Form(...), ring: str = Form("Watch"
 
 
 @app.post("/remove")
-def remove(request: Request, curation_id: int = Form(...), user=Depends(current_user), db=Depends(db_session)):
+def remove(request: Request, proposal_id: int = Form(...), user=Depends(current_user), db=Depends(db_session)):
+    """Entfernt die EIGENE Wertung eines Blips (geerbte Referenz-Blips bleiben)."""
     if not can_edit(user):
         return RedirectResponse("/radar", 303)
-    c = db.get(Curation, curation_id)
-    if c and c.tenant_id == user.tenant_id:
+    c = db.scalar(select(Curation).where(Curation.tenant_id == user.tenant_id,
+                                         Curation.proposal_id == proposal_id))
+    if c:
         db.delete(c); db.commit()
     return RedirectResponse("/radar", 303)
 
@@ -326,22 +394,22 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
         return RedirectResponse("/login", 302)
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
-    q = select(Curation, Proposal).join(Proposal, Curation.proposal_id == Proposal.id).where(
-        Curation.tenant_id == user.tenant_id)
-    items = list(db.execute(q).all())
+    eff = effective_curation(db, user.tenant_id)      # (Proposal, ring, origin)
     by_ring = {r: [] for r in RINGS}
-    for cur, prop in items:
-        by_ring.setdefault(cur.ring, []).append((cur, prop))
+    for prop, ring, origin in eff:
+        by_ring.setdefault(ring, []).append((prop, ring, origin))
     sectors, amap = _sectors_and_areamap()
     sector_ids = [s["id"] for s in sectors]
     fallback = sector_ids[0] if sector_ids else "area.x"
     themes = []
-    for cur, prop in items:
+    for prop, ring, origin in eff:
         sec = amap.get(prop.suggested_entry or "", "") or fallback
         if sec not in sector_ids:
             sec = fallback
-        themes.append({"id": str(prop.id), "name": prop.title, "ring": cur.ring,
+        themes.append({"id": str(prop.id), "name": prop.title, "ring": ring,
                        "sector": sec, "href": "#", "dom": prop.branchen or ""})
+    n_own = sum(1 for _p, _r, o in eff if o == "own")
+    n_ref = sum(1 for _p, _r, o in eff if o != "own")
     import sys as _sys
     if str(CORE_VIEW) not in _sys.path:
         _sys.path.insert(0, str(CORE_VIEW))
@@ -350,7 +418,8 @@ def radar(request: Request, user=Depends(current_user), db=Depends(db_session)):
     except Exception:
         RADAR_JS = ""
     return templates.TemplateResponse(request, "radar.html", {
-        **_nav(user, db), "active": "radar", "by_ring": by_ring, "rings": RINGS, "n": len(items),
+        **_nav(user, db), "active": "radar", "by_ring": by_ring, "rings": RINGS, "n": len(eff),
+        "n_own": n_own, "n_ref": n_ref,
         "themes_json": json.dumps(themes, ensure_ascii=False),
         "sectors_json": json.dumps(sectors, ensure_ascii=False), "radar_js": RADAR_JS})
 
