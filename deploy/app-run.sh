@@ -16,12 +16,14 @@ set -eu
 APP="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$APP"
 BRANCH="${KI_RADAR_BRANCH:-dev}"
-INST_URL="git@github.com:kaspAir/KI-Technology-Radar-Instanz.git"
 
 # ---- Konfig laden -------------------------------------------------------------
 set -a; [ -f .env ] && . ./.env; set +a
 : "${RADAR_DB:?RADAR_DB fehlt in .env}"
 : "${RADAR_SECRET:?RADAR_SECRET fehlt in .env}"
+# Instanz-Repo (privat): per .env (RADAR_INSTANCE_GIT) überschreibbar, damit ein
+# eigener SSH-Alias genutzt werden kann, ohne globales github.com zu ändern.
+INST_URL="${RADAR_INSTANCE_GIT:-git@github.com:kaspAir/KI-Technology-Radar-Instanz.git}"
 PORT="${RADAR_PORT:-8030}"; WORKERS="${RADAR_WORKERS:-2}"
 export RADAR_INSTANCE="${RADAR_INSTANCE:-$APP/../radar-instance}"
 
