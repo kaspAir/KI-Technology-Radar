@@ -1,12 +1,20 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}KI-Radar{% endblock %}</title>
+<link rel="icon" href="/static/radar-favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/radar-tile.svg">
 <style>
   :root{--gold:#C0851F;--ink:#23262D;--paper:#F8F6F2}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,sans-serif}
   .wrap{max-width:860px;margin:0 auto;padding:24px}
   header{display:flex;align-items:baseline;gap:18px;border-bottom:1px solid #e7e3da;padding:14px 24px;background:#fff;position:sticky;top:0;z-index:50;flex-wrap:wrap}
-  header .brand{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);font-weight:600}
+  /* Lockup nach Styleguide: Zeichen + Signatur klein oben, Produktname gross darunter.
+     Abstand Zeichen<->Text = 1/2 Zeichenhöhe (30px Zeichen -> 15px). */
+  header .brand{display:flex;align-items:center;gap:15px;text-decoration:none}
+  header .brand img{display:block;width:30px;height:30px}
+  header .wordmark{display:flex;flex-direction:column;line-height:1.08}
+  header .wordmark .sig{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);font-weight:600}
+  header .wordmark .prod{font-size:17px;font-weight:600;color:var(--ink)}
   header nav{margin-left:auto;display:flex;gap:16px;align-items:baseline}
   header a{color:var(--ink);text-decoration:none;font-size:14px}
   header a.active{color:var(--gold);font-weight:600}
@@ -32,7 +40,9 @@
   .grow{flex:1}
 </style></head><body>
 {% if user %}
-<header><span class="brand">Aletheia · Radar</span>
+<header><a class="brand" href="/" title="Radar — Neues am Horizont erkennen">
+  <img src="/static/radar-color.svg" alt="Radar">
+  <span class="wordmark"><span class="sig">Aletheia</span><span class="prod">Radar</span></span></a>
 <nav>
   {% if user.is_platform_admin %}
     <a href="/admin" class="{{ 'active' if active=='admin' }}">Mandanten</a>

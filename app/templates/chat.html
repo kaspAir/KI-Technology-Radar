@@ -1,7 +1,8 @@
 {% extends "base.html" %}{% set active='chat' %}{% block title %}Berater — KI-Radar{% endblock %}
 {% block body %}
 <style>
-  .msg{max-width:100%;margin:0 0 12px}
+  /* scroll-margin-top: der sticky Menübalken darf das Sprungziel nicht verdecken */
+  .msg{max-width:100%;margin:0 0 12px;scroll-margin-top:88px}
   .msg .who{font-size:12px;color:#8a867e;margin:0 0 3px}
   .msg .txt{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:11px 14px;
             font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -25,7 +26,7 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 {% endif %}
 
 {% for m in msgs %}
-<div class="msg {{ 'me' if m.role=='user' else 'bot' }}">
+<div class="msg {{ 'me' if m.role=='user' else 'bot' }}"{% if loop.last %} id="neueste"{% endif %}>
   <div class="who">{{ 'Ihr' if m.role=='user' else 'Berater' }}</div>
   <div class="txt">{{ m.content }}</div>
 </div>

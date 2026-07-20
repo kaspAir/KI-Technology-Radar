@@ -22,6 +22,7 @@ from urllib.parse import quote
 import yaml
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -39,6 +40,7 @@ INSTANCE = Path(os.environ.get("RADAR_INSTANCE", str(BASE.parent.parent / "KI-Te
 app = FastAPI(title="KI-Radar — Selbstbedienung")
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("RADAR_SECRET", "dev-only-change-me"))
 templates = Jinja2Templates(directory=str(BASE / "templates"))
+app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 
 
 @app.get("/healthz", response_class=PlainTextResponse)
@@ -330,13 +332,19 @@ def _inject_topbar(doc: str, nav: dict) -> str:
         'box-sizing:border-box;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;'
         'padding:12px 24px;background:#fff;border-bottom:1px solid #e7e3da;margin-bottom:22px;'
         'font-family:system-ui,-apple-system,sans-serif">'
-        '<span style="font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:#C0851F;'
-        'font-weight:600">Aletheia · Radar</span>'
+        '<a href="/" style="display:flex;align-items:center;gap:15px;text-decoration:none">'
+        '<img src="/static/radar-color.svg" alt="Radar" width="30" height="30" style="display:block">'
+        '<span style="display:flex;flex-direction:column;line-height:1.08">'
+        '<span style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#C0851F;'
+        'font-weight:600">Aletheia</span>'
+        '<span style="font-size:17px;font-weight:600;color:#23262D">Radar</span></span></a>'
         '<nav style="margin-left:auto;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">'
         + items + who
         + f'<span style="font-size:12px;color:#8a867e">{_html.escape(user.email)}</span>'
         f'<a href="/passwort" {a}>Passwort</a><a href="/logout" {a}>Abmelden</a></nav></header>')
-    doc = doc.replace('</head>', '<style>body{padding-top:0 !important}</style></head>', 1)
+    doc = doc.replace('</head>', '<link rel="icon" href="/static/radar-favicon.svg" type="image/svg+xml">'
+                                 '<link rel="apple-touch-icon" href="/static/radar-tile.svg">'
+                                 '<style>body{padding-top:0 !important}</style></head>', 1)
     m = re.search(r'<body[^>]*>', doc)
     if m:
         doc = doc[:m.end()] + bar + doc[m.end():]
@@ -763,7 +771,8 @@ def chat_send(request: Request, message: str = Form(...), user=Depends(current_u
     answer = _chat.ask(_chat_context(db, user.tenant_id, tenant.name if tenant else ""), history)
     db.add(ChatMessage(tenant_id=user.tenant_id, user_id=None, role="assistant", content=answer))
     db.commit()
-    return RedirectResponse("/chat", 303)
+    # Anker: der Browser springt zur neuesten Antwort statt an den Seitenanfang.
+    return RedirectResponse("/chat#neueste", 303)
 
 
 @app.post("/chat/reset")
