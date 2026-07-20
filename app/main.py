@@ -48,8 +48,21 @@ app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 @app.get("/healthz", response_class=PlainTextResponse)
 def healthz():
     """Liveness für den Keepalive-Watchdog (ohne Auth/DB — antwortet, solange der
-    Prozess lebt)."""
-    return "ok"
+    Prozess lebt). Gibt den laufenden Commit mit aus, damit ohne Rätselraten
+    erkennbar ist, WELCHER Stand gerade bedient wird."""
+    return f"ok {_running_commit()}"
+
+
+def _running_commit() -> str:
+    """Kurz-Id des ausgecheckten Commits, direkt aus .git gelesen (kein Build-Schritt)."""
+    try:
+        root = Path(__file__).resolve().parent.parent / ".git"
+        head = (root / "HEAD").read_text().strip()
+        if head.startswith("ref: "):
+            head = (root / head[5:]).read_text().strip()
+        return head[:8]
+    except Exception:
+        return "unbekannt"
 
 PROFILE_FIELDS = [
     ("§", "Identität & Mandat", None, None),

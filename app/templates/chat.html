@@ -3,7 +3,10 @@
 {% block title %}{% if pending %}⏳ Berater denkt nach — {% endif %}KI-Radar{% endblock %}
 {# Ohne JavaScript: Seite alle 5 s neu laden. Mit JavaScript fragt sie unten
    /chat/status ab und lädt erst neu, wenn die Antwort fertig ist (kein Flackern). #}
-{% block head %}{% if pending %}<noscript><meta http-equiv="refresh" content="5;url=/chat#neueste"></noscript>{% endif %}{% endblock %}
+{# Die Seite lädt IMMER selbst nach (nicht nur ohne JavaScript). Das Nachfragen per
+   JavaScript unten ist schneller und flackerfrei — aber es darf nicht der EINZIGE Weg
+   sein: klemmt es (Proxy, Erweiterung, Fehler), bliebe eine fertige Antwort unsichtbar. #}
+{% block head %}{% if pending %}<meta http-equiv="refresh" content="8;url=/chat#neueste">{% endif %}{% endblock %}
 {% block body %}
 <style>
   /* scroll-margin-top: der sticky Menübalken darf das Sprungziel nicht verdecken */
@@ -73,7 +76,8 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 
 {% if can_edit and pending %}
 <div class="row" style="margin-top:16px;align-items:center;gap:12px">
-  <span class="muted">Die Seite aktualisiert sich automatisch, sobald die Antwort da ist.</span>
+  <span class="muted">Die Seite aktualisiert sich automatisch, sobald die Antwort da ist.<br>
+    <span id="polled" style="font-size:12px"></span></span>
   <form method="post" action="/chat/cancel"><button type="submit" class="ghost">Abbrechen</button></form>
 </div>
 {% elif can_edit %}
@@ -120,14 +124,25 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
   // verwaister Platzhalter die fertige Antwort zurück, bis der Anwender abbricht.
   var seen = {{ last_done }};
   var reloading = false;
+  var note = document.getElementById('polled');
+  function say(t) { if (note) { note.textContent = t; } }
   function check() {
     if (reloading) return;
     fetch('/chat/status', { cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d.done > seen || !d.pending) { reloading = true; location.href = '/chat#neueste'; }
+      .then(function (r) {
+        if (!r.ok) { throw new Error('Status ' + r.status); }
+        return r.json();
       })
-      .catch(function () { /* Netz kurz weg — beim nächsten Mal wieder */ });
+      .then(function (d) {
+        // 'done' = jüngste FERTIGE Antwort. Fehlt das Feld, läuft eine ältere
+        // Fassung auf dem Server — dann nur auf 'pending' stützen.
+        var fertig = (typeof d.done === 'number') ? (d.done > seen) : false;
+        if (fertig || !d.pending) { reloading = true; location.href = '/chat#neueste'; return; }
+        say('zuletzt geprüft ' + new Date().toLocaleTimeString());
+      })
+      // Fehler NICHT verschlucken: sonst steht die Seite still und niemand weiss warum.
+      // Die Seite lädt ohnehin alle 8 s selbst nach — das hier ist die Erklärung dazu.
+      .catch(function (e) { say('Nachfragen klappt gerade nicht (' + e.message + ') — die Seite lädt trotzdem alle 8 s nach.'); });
   }
   // Alle 3 s nachfragen; sofort einmal, damit eine bereits fertige Antwort
   // nicht noch drei Sekunden liegen bleibt.
