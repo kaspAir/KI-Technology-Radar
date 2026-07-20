@@ -43,6 +43,7 @@
     <a href="/profil" class="{{ 'active' if active=='profil' }}">Profil</a>
     <a href="/lagebild">Lagebild</a>
     <a href="/markt" class="{{ 'active' if active=='markt' }}">Markt</a>
+    <a href="/chat" class="{{ 'active' if active=='chat' }}">Berater</a>
     {% if can_manage %}<a href="/team" class="{{ 'active' if active=='team' }}">Team</a>{% endif %}
     {% if tenant %}<span class="muted">{{ tenant.name }} · {{ user.role }}</span>{% endif %}
   {% endif %}

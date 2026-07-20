@@ -109,6 +109,18 @@ class CurationEvent(Base):
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class ChatMessage(Base):
+    """Gesprächsverlauf des Radar-Beraters — pro MANDANT (E25), nicht pro Nutzer:
+    das Team führt EIN Strategiegespräch. role = user|assistant."""
+    __tablename__ = "chat_messages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    role: Mapped[str] = mapped_column(String(20))
+    content: Mapped[str] = mapped_column(Text, default="")
+    created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class Profile(Base):
     """Mandanten-Profil (E24, pro Mandant). data = JSON der Profil-Felder."""
     __tablename__ = "profiles"

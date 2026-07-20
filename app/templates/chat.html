@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% set active='chat' %}{% block title %}Berater — KI-Radar{% endblock %}
+{% block body %}
+<style>
+  .msg{max-width:100%;margin:0 0 12px}
+  .msg .who{font-size:12px;color:#8a867e;margin:0 0 3px}
+  .msg .txt{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:11px 14px;
+            font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+  .msg.me .txt{background:#faf7f1;border-color:#eee7db}
+  .msg.bot .txt{border-left:3px solid var(--gold)}
+  .chatform textarea{width:100%;box-sizing:border-box;border:1px solid #e7e3da;border-radius:10px;
+                     padding:9px 11px;font:inherit;font-size:14px;resize:vertical}
+</style>
+<h1>Berater</h1>
+<p class="sub">Ein Gespräch über eure strategische Entwicklung — geerdet <b>ausschliesslich</b>
+auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
+<b>Vorschläge</b>; entschieden wird von euch.</p>
+
+{% if not has_profile or n_blips == 0 %}
+<div class="card" style="border-left:3px solid var(--gold)">
+  Für ein gutes Gespräch fehlt noch Grundlage:
+  {% if not has_profile %}<a href="/profil" style="color:var(--gold)">Profil ausfüllen</a>{% endif %}
+  {% if not has_profile and n_blips == 0 %} · {% endif %}
+  {% if n_blips == 0 %}<a href="/proposals" style="color:var(--gold)">Themen aufnehmen</a>{% endif %}
+</div>
+{% endif %}
+
+{% for m in msgs %}
+<div class="msg {{ 'me' if m.role=='user' else 'bot' }}">
+  <div class="who">{{ 'Ihr' if m.role=='user' else 'Berater' }}</div>
+  <div class="txt">{{ m.content }}</div>
+</div>
+{% else %}
+<div class="card"><p class="sum">Noch kein Gespräch. Frag zum Beispiel:
+„Wo steht unsere Kuratierung im Widerspruch zu unserem Profil?" oder
+„Welche Lücke siehst du zwischen unseren Zielen und dem, was wir beobachten?"</p></div>
+{% endfor %}
+
+{% if can_edit %}
+<form method="post" action="/chat" class="chatform" style="margin-top:16px">
+  <textarea name="message" rows="3" placeholder="Frage oder Gedanke …"></textarea>
+  <div class="row" style="margin-top:8px;align-items:center">
+    <button type="submit">Senden</button>
+    <span class="muted">Antwort kann einen Moment dauern.</span>
+    {% if msgs %}
+    <span class="grow"></span>
+    {% endif %}
+  </div>
+</form>
+{% if msgs %}
+<form method="post" action="/chat/reset" style="margin-top:10px">
+  <button type="submit" class="ghost">Gespräch zurücksetzen</button>
+</form>
+{% endif %}
+{% else %}
+<p class="muted">Nur-Lese-Zugriff — Mitglieder und Admins können mit dem Berater sprechen.</p>
+{% endif %}
+{% endblock %}

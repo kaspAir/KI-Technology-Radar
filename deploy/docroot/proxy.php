@@ -17,7 +17,7 @@ $ch = curl_init($target);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HEADER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+curl_setopt($ch, CURLOPT_TIMEOUT, 180);   // Berater-Antworten (LLM) dürfen dauern
 
 // Request-Header durchreichen (Host weglassen – Backend bindet lokal)
 $headers = [];

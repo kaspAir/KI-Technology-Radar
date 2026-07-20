@@ -32,6 +32,6 @@ set +a
 
 nohup .venv/bin/gunicorn app.main:app \
     -k uvicorn.workers.UvicornWorker \
-    --bind "127.0.0.1:$PORT" --workers "$WORKERS" --timeout 60 \
+    --bind "127.0.0.1:$PORT" --workers "$WORKERS" --timeout "${RADAR_TIMEOUT:-180}" \
     --access-logfile logs/access.log --error-logfile logs/error.log >/dev/null 2>&1 &
 echo $! > tmp/gunicorn.pid

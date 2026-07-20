@@ -5,6 +5,8 @@ jinja2
 itsdangerous
 python-multipart
 pyyaml
+# Radar-Berater (geerdeter Chat) — offizielles Anthropic-SDK
+anthropic
 # Produktion (Server):
 gunicorn
 # Produktion (MariaDB): RADAR_DB=mysql+pymysql://user:pw@host:3306/db?charset=utf8mb4

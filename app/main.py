@@ -27,8 +27,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
-from .db import (Curation, CurationEvent, Profile, Proposal, ROLES, SessionLocal,
-                 Tenant, User, init_db)
+from .db import (ChatMessage, Curation, CurationEvent, Profile, Proposal, ROLES,
+                 SessionLocal, Tenant, User, init_db)
 from .security import hash_pw, verify_pw
 
 RINGS = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
@@ -721,6 +721,58 @@ def thema(request: Request, pid: int, user=Depends(current_user), db=Depends(db_
             doc = re.sub(r'href="detail[a-z]*-[^"]*\.html"', 'href="#" onclick="return false"', doc)
             return HTMLResponse(_inject_topbar(doc, _nav(user, db)))
     return templates.TemplateResponse(request, "thema.html", {**_nav(user, db), "active": "radar", "p": p})
+
+
+# --- Radar-Berater (geerdetes Strategiegespräch, pro Mandant) ----------------
+def _chat_context(db, tenant_id, tenant_name):
+    """Erdung: Profil (inkl. Vorgaben) + die gewählten Radar-Inhalte — sonst nichts."""
+    from . import chat as _chat
+    labels = {k: lbl for k, lbl, _t, _o in PROFILE_FIELDS if k != "§"}
+    return _chat.build_context(tenant_name, effective_profile(db, tenant_id),
+                               effective_curation(db, tenant_id), labels)
+
+
+@app.get("/chat", response_class=HTMLResponse)
+def chat_page(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    msgs = db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id)
+                      .order_by(ChatMessage.id)).all()
+    return templates.TemplateResponse(request, "chat.html", {
+        **_nav(user, db), "active": "chat", "msgs": msgs,
+        "has_profile": bool(effective_profile(db, user.tenant_id)),
+        "n_blips": len(effective_curation(db, user.tenant_id))})
+
+
+@app.post("/chat")
+def chat_send(request: Request, message: str = Form(...), user=Depends(current_user),
+              db=Depends(db_session)):
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/chat", 303)
+    text = (message or "").strip()
+    if not text:
+        return RedirectResponse("/chat", 303)
+    from . import chat as _chat
+    tenant = db.get(Tenant, user.tenant_id)
+    db.add(ChatMessage(tenant_id=user.tenant_id, user_id=user.id, role="user", content=text))
+    db.commit()
+    history = [{"role": m.role, "content": m.content} for m in db.scalars(
+        select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id).order_by(ChatMessage.id))]
+    answer = _chat.ask(_chat_context(db, user.tenant_id, tenant.name if tenant else ""), history)
+    db.add(ChatMessage(tenant_id=user.tenant_id, user_id=None, role="assistant", content=answer))
+    db.commit()
+    return RedirectResponse("/chat", 303)
+
+
+@app.post("/chat/reset")
+def chat_reset(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/chat", 303)
+    db.query(ChatMessage).filter(ChatMessage.tenant_id == user.tenant_id).delete()
+    db.commit()
+    return RedirectResponse("/chat", 303)
 
 
 @app.get("/markt", response_class=HTMLResponse)
