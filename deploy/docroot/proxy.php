@@ -40,11 +40,19 @@ if ($method === 'HEAD') {
     curl_setopt($ch, CURLOPT_NOBODY, true);
 }
 
+// Beim Deploy startet Gunicorn neu — der Port ist ~1–2 s leer. Einen reinen
+// VERBINDUNGSfehler deshalb einmal wiederholen (da wurde nichts verarbeitet,
+// ein Retry ist also auch für POST unbedenklich). Timeouts NICHT wiederholen:
+// dort kann die Anfrage bereits verarbeitet worden sein.
 $response = curl_exec($ch);
+if ($response === false && in_array(curl_errno($ch), [CURLE_COULDNT_CONNECT, CURLE_COULDNT_RESOLVE_HOST], true)) {
+    sleep(2);
+    $response = curl_exec($ch);
+}
 if ($response === false) {
     http_response_code(502);
     header('Content-Type: text/plain; charset=utf-8');
-    echo 'Bad Gateway: Radar-MVP nicht erreichbar.';
+    echo 'Bad Gateway: Radar-MVP nicht erreichbar (' . curl_error($ch) . ').';
     exit;
 }
 
