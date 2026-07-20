@@ -25,9 +25,12 @@ if [ -f tmp/gunicorn.pid ]; then
     kill "$(cat tmp/gunicorn.pid)" 2>/dev/null || true
 fi
 
-# Secrets/Konfig laden (KEY=VALUE je Zeile; nicht im Repo)
+# Secrets/Konfig laden (KEY=VALUE je Zeile; nicht im Repo).
+# Auch ~/.ki-radar-env, weil dort der ANTHROPIC_API_KEY liegen kann — den braucht
+# der Web-Prozess für den Radar-Berater (/chat), nicht nur die Ingestion.
 set -a
 [ -f .env ] && . ./.env
+[ -f "$HOME/.ki-radar-env" ] && . "$HOME/.ki-radar-env"
 set +a
 
 nohup .venv/bin/gunicorn app.main:app \
