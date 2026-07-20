@@ -750,16 +750,58 @@ def _attachments_by_message(db, tenant_id):
     return out
 
 
+# Ein Platzhalter, der so lange offen ist, wurde von niemandem mehr beantwortet
+# (Neustart, abgestürzter Worker). Er darf die Seite nicht ewig blockieren.
+CHAT_STALE_SECONDS = int(os.environ.get("RADAR_CHAT_STALE_SECONDS", "900"))
+
+
+def _db_now(db):
+    """Aktuelle Zeit AUS DER DATENBANK — nur so ist sie mit created vergleichbar
+    (SQLite und MariaDB setzen created serverseitig, evtl. andere Zeitzone)."""
+    now = db.scalar(select(func.now()))
+    if isinstance(now, str):        # SQLite liefert 'YYYY-MM-DD HH:MM:SS'
+        return _dt.datetime.strptime(now[:19], "%Y-%m-%d %H:%M:%S")
+    return now
+
+
+def _expire_stale(db, tenant_id) -> None:
+    """Verwaiste Platzhalter ehrlich abschliessen statt endlos „denkt nach" zu zeigen."""
+    open_ = db.scalars(select(ChatMessage).where(
+        ChatMessage.tenant_id == tenant_id, ChatMessage.status == "pending")).all()
+    if not open_:
+        return
+    now = _db_now(db)
+    changed = False
+    for m in open_:
+        if m.created and (now - m.created).total_seconds() > CHAT_STALE_SECONDS:
+            m.content = ("Diese Antwort ging verloren — vermutlich wurde der Dienst mitten im "
+                         "Nachdenken neu gestartet. Bitte die Frage nochmals senden.")
+            m.status = "error"
+            changed = True
+    if changed:
+        db.commit()
+
+
+def _last_done_id(db, tenant_id) -> int:
+    """Id der jüngsten FERTIGEN Nachricht. Die Seite fragt damit „hat sich etwas
+    getan?" — unabhängig davon, ob irgendwo noch ein Platzhalter offen steht."""
+    return db.scalar(select(func.max(ChatMessage.id)).where(
+        ChatMessage.tenant_id == tenant_id,
+        ChatMessage.archived == False,                 # noqa: E712
+        ChatMessage.status != "pending")) or 0
+
+
 def _chat_history(db, tenant_id):
     """Verlauf fürs Modell: Nachrichtentext + der extrahierte Text der Anhänge,
     klar als DOKUMENT gekennzeichnet (damit der Berater die Quelle benennen kann).
-    Noch offene Platzhalter (status='pending') gehören nicht in den Verlauf."""
+    Offene Platzhalter (pending) und gescheiterte Versuche (error) gehören nicht in
+    den Verlauf — sie tragen nichts bei und würden den Berater nur verwirren."""
     atts = _attachments_by_message(db, tenant_id)
     hist, seen = [], set()
     for m in db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == tenant_id,
                                                   ChatMessage.archived == False)  # noqa: E712
                         .order_by(ChatMessage.id)):
-        if m.status == "pending":
+        if m.status in ("pending", "error"):
             continue
         content = m.content
         for a in atts.get(m.id, []):
@@ -784,6 +826,7 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
     from . import chat as _chat
+    _expire_stale(db, user.tenant_id)
     msgs = db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id,
                                                 ChatMessage.archived == False)  # noqa: E712
                       .order_by(ChatMessage.id)).all()
@@ -793,6 +836,7 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
     return templates.TemplateResponse(request, "chat.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
         "pending": any(m.status == "pending" for m in msgs),
+        "last_done": _last_done_id(db, user.tenant_id),
         "ctx_chars": sum(len(m["content"]) for m in kept), "ctx_dropped": dropped,
         "ctx_budget": _chat.HISTORY_BUDGET, "n_archived": n_archived,
         "atts": _attachments_by_message(db, user.tenant_id),
@@ -851,21 +895,33 @@ async def chat_send(request: Request, background: BackgroundTasks, message: str 
 
 @app.get("/chat/status")
 def chat_status(request: Request, user=Depends(current_user), db=Depends(db_session)):
-    """Winziger Endpunkt fürs Nachfragen der Seite: läuft noch eine Antwort?"""
+    """Winziger Endpunkt fürs Nachfragen der Seite.
+
+    Entscheidend ist `done` = Id der jüngsten FERTIGEN Nachricht. Die Seite lädt neu,
+    sobald sich diese Id ändert. Früher wartete sie darauf, dass NICHTS mehr offen ist —
+    ein verwaister Platzhalter (Neustart mitten im Lauf) blockierte dann die fertige
+    Antwort dauerhaft, bis der Anwender abbrach. Genau das darf nicht passieren.
+    """
     if not user or not user.tenant_id:
-        return JSONResponse({"pending": False})
+        return JSONResponse({"pending": False, "done": 0})
+    _expire_stale(db, user.tenant_id)
     n = db.scalar(select(func.count()).select_from(ChatMessage).where(
         ChatMessage.tenant_id == user.tenant_id, ChatMessage.status == "pending"))
-    return JSONResponse({"pending": bool(n)})
+    return JSONResponse({"pending": bool(n), "done": _last_done_id(db, user.tenant_id)},
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.post("/chat/cancel")
 def chat_cancel(request: Request, user=Depends(current_user), db=Depends(db_session)):
-    """Hängengebliebene Anfrage verwerfen (z.B. nach einem Neustart mitten im Lauf)."""
+    """Warten aufgeben. Der Platzhalter wird NICHT gelöscht, sondern als gescheitert
+    markiert: trifft die Antwort doch noch ein, schreibt der Hintergrundlauf sie
+    hinein und sie erscheint — statt verloren zu gehen."""
     if not can_edit(user) or not user.tenant_id:
         return RedirectResponse("/chat", 303)
     db.query(ChatMessage).filter(ChatMessage.tenant_id == user.tenant_id,
-                                 ChatMessage.status == "pending").delete()
+                                 ChatMessage.status == "pending").update(
+        {"status": "error",
+         "content": "Abgebrochen. Falls die Antwort doch noch eintrifft, erscheint sie hier."})
     db.commit()
     return RedirectResponse("/chat", 303)
 

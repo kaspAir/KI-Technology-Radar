@@ -115,13 +115,23 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
     el.textContent = '(' + Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2) + ')';
   }
   tick(); setInterval(tick, 1000);
+  // Stand, den diese Seite bereits zeigt. Wir laden neu, sobald eine NEUE fertige
+  // Antwort da ist — nicht erst, wenn gar nichts mehr offen ist. Sonst hält ein
+  // verwaister Platzhalter die fertige Antwort zurück, bis der Anwender abbricht.
+  var seen = {{ last_done }};
+  var reloading = false;
   function check() {
+    if (reloading) return;
     fetch('/chat/status', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
-      .then(function (d) { if (!d.pending) { location.href = '/chat#neueste'; } })
+      .then(function (d) {
+        if (d.done > seen || !d.pending) { reloading = true; location.href = '/chat#neueste'; }
+      })
       .catch(function () { /* Netz kurz weg — beim nächsten Mal wieder */ });
   }
-  // Alle 3 s nachfragen; erst wenn die Antwort fertig ist, neu laden.
+  // Alle 3 s nachfragen; sofort einmal, damit eine bereits fertige Antwort
+  // nicht noch drei Sekunden liegen bleibt.
+  check();
   setInterval(check, 3000);
   // Browser drosseln Timer in HINTERGRUND-Tabs stark. Deshalb sofort nachfragen,
   // sobald der Tab wieder sichtbar wird — sonst wirkt eine fertige Antwort hängend.
