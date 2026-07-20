@@ -1,6 +1,9 @@
-{% extends "base.html" %}{% set active='chat' %}{% block title %}Berater — KI-Radar{% endblock %}
-{# Solange die Antwort im Hintergrund entsteht: Seite alle 5 s neu laden. #}
-{% block head %}{% if pending %}<meta http-equiv="refresh" content="5;url=/chat#neueste">{% endif %}{% endblock %}
+{% extends "base.html" %}{% set active='chat' %}
+{# Titel zeigt im Browser-Tab, dass gearbeitet wird. #}
+{% block title %}{% if pending %}⏳ Berater denkt nach — {% endif %}KI-Radar{% endblock %}
+{# Ohne JavaScript: Seite alle 5 s neu laden. Mit JavaScript fragt sie unten
+   /chat/status ab und lädt erst neu, wenn die Antwort fertig ist (kein Flackern). #}
+{% block head %}{% if pending %}<noscript><meta http-equiv="refresh" content="5;url=/chat#neueste"></noscript>{% endif %}{% endblock %}
 {% block body %}
 <style>
   /* scroll-margin-top: der sticky Menübalken darf das Sprungziel nicht verdecken */
@@ -13,6 +16,21 @@
   .chatform textarea{width:100%;box-sizing:border-box;border:1px solid #e7e3da;border-radius:10px;
                      padding:9px 11px;font:inherit;font-size:14px;resize:vertical}
   .att{font-size:12.5px;color:#4a4741;margin:5px 0 0 2px;overflow-wrap:anywhere}
+  /* Sichtbares Arbeiten: pulsende Punkte + unbestimmter Fortschrittsbalken */
+  .think{display:inline-flex;gap:5px;align-items:center;margin-right:8px;vertical-align:middle}
+  .think i{width:7px;height:7px;border-radius:50%;background:var(--gold);display:inline-block;
+           animation:radarblink 1.2s infinite}
+  .think i:nth-child(2){animation-delay:.2s}
+  .think i:nth-child(3){animation-delay:.4s}
+  @keyframes radarblink{0%,80%,100%{opacity:.22}40%{opacity:1}}
+  .bar{height:3px;background:#eee7db;border-radius:2px;overflow:hidden;margin-top:10px}
+  .bar span{display:block;height:100%;width:35%;background:var(--gold);border-radius:2px;
+            animation:radarslide 1.8s ease-in-out infinite}
+  @keyframes radarslide{0%{margin-left:-35%}100%{margin-left:100%}}
+  @media (prefers-reduced-motion:reduce){
+    .think i,.bar span{animation:none}
+    .think i{opacity:.7}
+  }
   .chatform input[type=file]{font-size:12.5px}
 </style>
 <h1>Berater</h1>
@@ -32,7 +50,7 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 {% for m in msgs %}
 <div class="msg {{ 'me' if m.role=='user' else 'bot' }}"{% if loop.last %} id="neueste"{% endif %}>
   <div class="who">{{ 'Ihr' if m.role=='user' else 'Berater' }}</div>
-  <div class="txt">{% if m.status == 'pending' %}<span class="muted">Der Berater denkt nach … das kann bei langem Verlauf oder grossen Anhängen einige Minuten dauern.</span>{% else %}{{ m.content }}{% endif %}</div>
+  <div class="txt">{% if m.status == 'pending' %}<span class="think"><i></i><i></i><i></i></span><span class="muted">Der Berater denkt nach <span id="elapsed"></span> — bei langem Verlauf oder grossen Anhängen einige Minuten.</span><div class="bar"><span></span></div>{% else %}{{ m.content }}{% endif %}</div>
   {% for a in atts.get(m.id, []) %}
     <div class="att">📎 <b>{{ a.filename }}</b> <span class="muted">({{ a.kind }}{% if a.note %} · {{ a.note }}{% endif %})</span>
       {% if not a.text %}<span style="color:#b3261e"> — nicht auswertbar</span>{% endif %}</div>
@@ -73,5 +91,27 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 {% endif %}
 {% else %}
 <p class="muted">Nur-Lese-Zugriff — Mitglieder und Admins können mit dem Berater sprechen.</p>
+{% endif %}
+
+{% if pending %}
+<script>
+(function () {
+  // Laufende Uhr: zeigt, dass wirklich gearbeitet wird.
+  var t0 = Date.now(), el = document.getElementById('elapsed');
+  function tick() {
+    if (!el) return;
+    var s = Math.floor((Date.now() - t0) / 1000);
+    el.textContent = '(' + Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2) + ')';
+  }
+  tick(); setInterval(tick, 1000);
+  // Alle 3 s nachfragen; erst wenn die Antwort fertig ist, neu laden.
+  setInterval(function () {
+    fetch('/chat/status', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (!d.pending) { location.href = '/chat#neueste'; } })
+      .catch(function () { /* Netz kurz weg — beim nächsten Mal wieder */ });
+  }, 3000);
+})();
+</script>
 {% endif %}
 {% endblock %}

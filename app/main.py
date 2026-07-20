@@ -21,7 +21,8 @@ from urllib.parse import quote
 
 import yaml
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (HTMLResponse, JSONResponse, PlainTextResponse,
+                               RedirectResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -830,6 +831,16 @@ async def chat_send(request: Request, background: BackgroundTasks, message: str 
     background.add_task(_run_chat_answer, user.tenant_id,
                         tenant.name if tenant else "", holder.id)
     return RedirectResponse("/chat#neueste", 303)
+
+
+@app.get("/chat/status")
+def chat_status(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Winziger Endpunkt fürs Nachfragen der Seite: läuft noch eine Antwort?"""
+    if not user or not user.tenant_id:
+        return JSONResponse({"pending": False})
+    n = db.scalar(select(func.count()).select_from(ChatMessage).where(
+        ChatMessage.tenant_id == user.tenant_id, ChatMessage.status == "pending"))
+    return JSONResponse({"pending": bool(n)})
 
 
 @app.post("/chat/cancel")
