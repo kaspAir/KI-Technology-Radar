@@ -104,13 +104,20 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
     el.textContent = '(' + Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2) + ')';
   }
   tick(); setInterval(tick, 1000);
-  // Alle 3 s nachfragen; erst wenn die Antwort fertig ist, neu laden.
-  setInterval(function () {
+  function check() {
     fetch('/chat/status', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) { if (!d.pending) { location.href = '/chat#neueste'; } })
       .catch(function () { /* Netz kurz weg — beim nächsten Mal wieder */ });
-  }, 3000);
+  }
+  // Alle 3 s nachfragen; erst wenn die Antwort fertig ist, neu laden.
+  setInterval(check, 3000);
+  // Browser drosseln Timer in HINTERGRUND-Tabs stark. Deshalb sofort nachfragen,
+  // sobald der Tab wieder sichtbar wird — sonst wirkt eine fertige Antwort hängend.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { check(); }
+  });
+  window.addEventListener('focus', check);
 })();
 </script>
 {% endif %}
