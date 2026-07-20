@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import yaml
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -28,8 +28,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
-from .db import (ChatMessage, Curation, CurationEvent, Profile, Proposal, ROLES,
-                 SessionLocal, Tenant, User, init_db)
+from .db import (ChatAttachment, ChatMessage, Curation, CurationEvent, Profile,
+                 Proposal, ROLES, SessionLocal, Tenant, User, init_db)
 from .security import hash_pw, verify_pw
 
 RINGS = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
@@ -740,6 +740,30 @@ def _chat_context(db, tenant_id, tenant_name):
                                effective_curation(db, tenant_id), labels)
 
 
+def _attachments_by_message(db, tenant_id):
+    out = {}
+    for a in db.scalars(select(ChatAttachment).where(ChatAttachment.tenant_id == tenant_id)
+                        .order_by(ChatAttachment.id)):
+        out.setdefault(a.message_id, []).append(a)
+    return out
+
+
+def _chat_history(db, tenant_id):
+    """Verlauf fürs Modell: Nachrichtentext + der extrahierte Text der Anhänge,
+    klar als DOKUMENT gekennzeichnet (damit der Berater die Quelle benennen kann)."""
+    atts = _attachments_by_message(db, tenant_id)
+    hist = []
+    for m in db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == tenant_id)
+                        .order_by(ChatMessage.id)):
+        content = m.content
+        for a in atts.get(m.id, []):
+            if a.text:
+                content += (f"\n\n--- DOKUMENT: {a.filename} ({a.kind}) ---\n"
+                            f"{a.text}\n--- ENDE DOKUMENT ---")
+        hist.append({"role": m.role, "content": content})
+    return hist
+
+
 @app.get("/chat", response_class=HTMLResponse)
 def chat_page(request: Request, user=Depends(current_user), db=Depends(db_session)):
     if not user:
@@ -750,24 +774,35 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
                       .order_by(ChatMessage.id)).all()
     return templates.TemplateResponse(request, "chat.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
+        "atts": _attachments_by_message(db, user.tenant_id),
         "has_profile": bool(effective_profile(db, user.tenant_id)),
         "n_blips": len(effective_curation(db, user.tenant_id))})
 
 
 @app.post("/chat")
-def chat_send(request: Request, message: str = Form(...), user=Depends(current_user),
-              db=Depends(db_session)):
+async def chat_send(request: Request, message: str = Form(""),
+                    files: list[UploadFile] = File(default=[]),
+                    user=Depends(current_user), db=Depends(db_session)):
     if not can_edit(user) or not user.tenant_id:
         return RedirectResponse("/chat", 303)
+    from . import chat as _chat, extract as _extract
+    uploads = [f for f in (files or []) if getattr(f, "filename", "")]
     text = (message or "").strip()
-    if not text:
+    if not text and not uploads:
         return RedirectResponse("/chat", 303)
-    from . import chat as _chat
+    if not text:
+        text = "(Dokument zur Durchsicht hochgeladen.)"
+
     tenant = db.get(Tenant, user.tenant_id)
-    db.add(ChatMessage(tenant_id=user.tenant_id, user_id=user.id, role="user", content=text))
+    msg = ChatMessage(tenant_id=user.tenant_id, user_id=user.id, role="user", content=text)
+    db.add(msg); db.flush()
+    for f in uploads:
+        kind, doc, note = _extract.extract(f.filename, await f.read())
+        db.add(ChatAttachment(tenant_id=user.tenant_id, message_id=msg.id,
+                              filename=f.filename[:255], kind=kind or "?",
+                              note=note[:255], text=doc))
     db.commit()
-    history = [{"role": m.role, "content": m.content} for m in db.scalars(
-        select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id).order_by(ChatMessage.id))]
+    history = _chat_history(db, user.tenant_id)
     answer = _chat.ask(_chat_context(db, user.tenant_id, tenant.name if tenant else ""), history)
     db.add(ChatMessage(tenant_id=user.tenant_id, user_id=None, role="assistant", content=answer))
     db.commit()
@@ -779,6 +814,7 @@ def chat_send(request: Request, message: str = Form(...), user=Depends(current_u
 def chat_reset(request: Request, user=Depends(current_user), db=Depends(db_session)):
     if not can_edit(user) or not user.tenant_id:
         return RedirectResponse("/chat", 303)
+    db.query(ChatAttachment).filter(ChatAttachment.tenant_id == user.tenant_id).delete()
     db.query(ChatMessage).filter(ChatMessage.tenant_id == user.tenant_id).delete()
     db.commit()
     return RedirectResponse("/chat", 303)

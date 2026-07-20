@@ -10,6 +10,8 @@
   .msg.bot .txt{border-left:3px solid var(--gold)}
   .chatform textarea{width:100%;box-sizing:border-box;border:1px solid #e7e3da;border-radius:10px;
                      padding:9px 11px;font:inherit;font-size:14px;resize:vertical}
+  .att{font-size:12.5px;color:#4a4741;margin:5px 0 0 2px;overflow-wrap:anywhere}
+  .chatform input[type=file]{font-size:12.5px}
 </style>
 <h1>Berater</h1>
 <p class="sub">Ein Gespräch über eure strategische Entwicklung — geerdet <b>ausschliesslich</b>
@@ -29,6 +31,10 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 <div class="msg {{ 'me' if m.role=='user' else 'bot' }}"{% if loop.last %} id="neueste"{% endif %}>
   <div class="who">{{ 'Ihr' if m.role=='user' else 'Berater' }}</div>
   <div class="txt">{{ m.content }}</div>
+  {% for a in atts.get(m.id, []) %}
+    <div class="att">📎 <b>{{ a.filename }}</b> <span class="muted">({{ a.kind }}{% if a.note %} · {{ a.note }}{% endif %})</span>
+      {% if not a.text %}<span style="color:#b3261e"> — nicht auswertbar</span>{% endif %}</div>
+  {% endfor %}
 </div>
 {% else %}
 <div class="card"><p class="sum">Noch kein Gespräch. Frag zum Beispiel:
@@ -37,8 +43,14 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 {% endfor %}
 
 {% if can_edit %}
-<form method="post" action="/chat" class="chatform" style="margin-top:16px">
+<form method="post" action="/chat" class="chatform" enctype="multipart/form-data" style="margin-top:16px">
   <textarea name="message" rows="3" placeholder="Frage oder Gedanke …"></textarea>
+  <div style="margin:8px 0 0">
+    <label class="muted">Dokumente (optional):
+      <input type="file" name="files" multiple accept=".pdf,.docx,.xlsx,.pptx"></label>
+    <div class="muted" style="margin-top:3px">PDF, Word, Excel, PowerPoint · max. 10 MB je Datei ·
+      es wird der <b>Text</b> ausgewertet (kein Layout, keine Bilder).</div>
+  </div>
   <div class="row" style="margin-top:8px;align-items:center">
     <button type="submit">Senden</button>
     <span class="muted">Antwort kann einen Moment dauern.</span>

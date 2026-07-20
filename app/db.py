@@ -121,6 +121,20 @@ class ChatMessage(Base):
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class ChatAttachment(Base):
+    """Vom Mandanten hochgeladenes Dokument zu einer Chat-Nachricht. Gespeichert wird
+    der EXTRAHIERTE TEXT (nicht die Datei) — er ist die Quelle, die der Berater sieht."""
+    __tablename__ = "chat_attachments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("chat_messages.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255), default="")
+    kind: Mapped[str] = mapped_column(String(20), default="")
+    note: Mapped[str] = mapped_column(String(255), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class Profile(Base):
     """Mandanten-Profil (E24, pro Mandant). data = JSON der Profil-Felder."""
     __tablename__ = "profiles"

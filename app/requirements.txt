@@ -7,6 +7,11 @@ python-multipart
 pyyaml
 # Radar-Berater (geerdeter Chat) — offizielles Anthropic-SDK
 anthropic
+# Text-Extraktion aus Anhängen (PDF, Word, Excel, PowerPoint)
+pypdf
+python-docx
+openpyxl
+python-pptx
 # Produktion (Server):
 gunicorn
 # Produktion (MariaDB): RADAR_DB=mysql+pymysql://user:pw@host:3306/db?charset=utf8mb4
