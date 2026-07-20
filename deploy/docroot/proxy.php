@@ -7,11 +7,68 @@
 //   app.ki-tech-radar.ch  ->  127.0.0.1:8030
 //
 // HTTPS wird von der Infomaniak-Plattform erzwungen (Panel), NICHT hier per Redirect.
+//
+// WICHTIG (Datei-Uploads): Bei multipart/form-data parst PHP den Body selbst nach
+// $_POST/$_FILES und lässt php://input LEER. Wer dort liest, schickt einen leeren
+// Body weiter — der Backend-Server wartet dann auf die angekündigte Content-Length
+// bis zum Timeout. Deshalb bauen wir den multipart-Body unten neu auf.
 
 $BACKEND = 'http://127.0.0.1:8030';
 
 $target = $BACKEND . ($_SERVER['REQUEST_URI'] ?? '/');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$ctype  = $_SERVER['CONTENT_TYPE'] ?? '';
+$isMultipart = stripos($ctype, 'multipart/form-data') !== false;
+
+/** Baut aus $_POST/$_FILES wieder einen multipart-Body (inkl. mehrfach gleicher Feldnamen). */
+function radar_build_multipart(string $boundary): string
+{
+    $body = '';
+    $add = function ($name, $value) use (&$body, $boundary) {
+        $body .= "--$boundary\r\n"
+              .  "Content-Disposition: form-data; name=\"$name\"\r\n\r\n"
+              .  $value . "\r\n";
+    };
+    foreach ($_POST as $k => $v) {
+        foreach ((array) $v as $vv) {
+            $add($k, (string) $vv);
+        }
+    }
+    foreach ($_FILES as $k => $f) {
+        $names = (array) $f['name'];
+        $tmps  = (array) $f['tmp_name'];
+        $types = (array) $f['type'];
+        $errs  = (array) $f['error'];
+        foreach ($names as $i => $n) {
+            if (($errs[$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || $n === '') {
+                continue;   // leeres Feld oder Upload-Fehler (z.B. über PHP-Limit)
+            }
+            $data = @file_get_contents($tmps[$i]);
+            if ($data === false) {
+                continue;
+            }
+            $type = $types[$i] ?: 'application/octet-stream';
+            $body .= "--$boundary\r\n"
+                  .  "Content-Disposition: form-data; name=\"$k\"; filename=\"$n\"\r\n"
+                  .  "Content-Type: $type\r\n\r\n"
+                  .  $data . "\r\n";
+        }
+    }
+    return $body . "--$boundary--\r\n";
+}
+
+// --- Body vorbereiten ---------------------------------------------------------
+$body = null;
+$ownCtype = null;
+if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+    if ($isMultipart) {
+        $boundary = '----RadarProxy' . bin2hex(random_bytes(16));
+        $body = radar_build_multipart($boundary);
+        $ownCtype = 'multipart/form-data; boundary=' . $boundary;
+    } else {
+        $body = file_get_contents('php://input');
+    }
+}
 
 $ch = curl_init($target);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -19,21 +76,30 @@ curl_setopt($ch, CURLOPT_HEADER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
 curl_setopt($ch, CURLOPT_TIMEOUT, 180);   // Berater-Antworten (LLM) dürfen dauern
 
-// Request-Header durchreichen (Host weglassen – Backend bindet lokal)
+// --- Request-Header durchreichen ---------------------------------------------
+// Host weglassen (Backend bindet lokal); Content-Length weglassen (curl rechnet
+// sie zum TATSÄCHLICHEN Body neu — sonst wartet das Backend auf fehlende Bytes);
+// Content-Type nur ersetzen, wenn wir den multipart-Body selbst gebaut haben.
 $headers = [];
 foreach (getallheaders() as $k => $v) {
-    if (strtolower($k) === 'host') {
+    $lk = strtolower($k);
+    if ($lk === 'host' || $lk === 'content-length') {
+        continue;
+    }
+    if ($ownCtype !== null && $lk === 'content-type') {
         continue;
     }
     $headers[] = "$k: $v";
+}
+if ($ownCtype !== null) {
+    $headers[] = 'Content-Type: ' . $ownCtype;
 }
 $headers[] = 'X-Forwarded-Proto: https';
 $headers[] = 'X-Forwarded-For: ' . ($_SERVER['REMOTE_ADDR'] ?? '');
 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-// Request-Body bei schreibenden Methoden
-if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-    curl_setopt($ch, CURLOPT_POSTFIELDS, file_get_contents('php://input'));
+if ($body !== null) {
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
 }
 // HEAD: nur Header holen, keinen Body erwarten (sonst wartet curl -> 502)
 if ($method === 'HEAD') {
@@ -59,15 +125,16 @@ if ($response === false) {
 $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
 $status      = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $raw_headers = substr($response, 0, $header_size);
-$body        = substr($response, $header_size);
+$resp_body   = substr($response, $header_size);
 curl_close($ch);
 
+// --- Antwort-Header zurückgeben (Set-Cookie behalten!) -----------------------
 http_response_code($status);
 foreach (explode("\r\n", $raw_headers) as $line) {
     if ($line === '') {
         continue;
     }
-    // Status- und Hop-by-hop-Zeilen nicht weiterreichen (Set-Cookie bleibt erhalten)
+    // Status- und Hop-by-hop-Zeilen nicht weiterreichen
     if (stripos($line, 'HTTP/') === 0) {
         continue;
     }
@@ -79,4 +146,4 @@ foreach (explode("\r\n", $raw_headers) as $line) {
     }
     header($line, false);
 }
-echo $body;
+echo $resp_body;
