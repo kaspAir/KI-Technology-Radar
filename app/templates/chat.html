@@ -1,12 +1,13 @@
 {% extends "base.html" %}{% set active='chat' %}
 {# Titel zeigt im Browser-Tab, dass gearbeitet wird. #}
 {% block title %}{% if pending %}⏳ Berater denkt nach — {% endif %}KI-Radar{% endblock %}
-{# Ohne JavaScript: Seite alle 5 s neu laden. Mit JavaScript fragt sie unten
-   /chat/status ab und lädt erst neu, wenn die Antwort fertig ist (kein Flackern). #}
 {# Die Seite lädt IMMER selbst nach (nicht nur ohne JavaScript). Das Nachfragen per
    JavaScript unten ist schneller und flackerfrei — aber es darf nicht der EINZIGE Weg
-   sein: klemmt es (Proxy, Erweiterung, Fehler), bliebe eine fertige Antwort unsichtbar. #}
-{% block head %}{% if pending %}<meta http-equiv="refresh" content="8;url=/chat#neueste">{% endif %}{% endblock %}
+   sein: klemmt es (Proxy, Erweiterung, Fehler), bliebe eine fertige Antwort unsichtbar.
+   OHNE url=: die Seite lädt SICH SELBST neu. Mit url=/chat#neueste passierte nichts —
+   das ist dieselbe Adresse, auf der die Seite schon steht, und ein Sprung auf die
+   eigene Adresse ist keine Navigation. #}
+{% block head %}{% if pending %}<meta http-equiv="refresh" content="8">{% endif %}{% endblock %}
 {% block body %}
 <style>
   /* scroll-margin-top: der sticky Menübalken darf das Sprungziel nicht verdecken */
@@ -131,6 +132,9 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
   // verwaister Platzhalter die fertige Antwort zurück, bis der Anwender abbricht.
   var seen = {{ last_done }};
   var reloading = false;
+  // Sicherung: sollte ein Neuladen wider Erwarten NICHT stattfinden, darf die Sperre
+  // das Nachfragen nicht dauerhaft abwürgen — genau daran ist es vorher gescheitert.
+  function armed() { setTimeout(function () { reloading = false; }, 5000); }
   var note = document.getElementById('polled');
   function say(t) { if (note) { note.textContent = t; } }
   function check() {
@@ -146,7 +150,10 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
         // Auf UNGLEICH prüfen, nicht auf grösser: die Seite soll auch dann nachladen,
         // wenn sich der Stand anders bewegt hat als erwartet.
         var fertig = (typeof d.done === 'number') ? (d.done !== seen) : false;
-        if (fertig || !d.pending) { reloading = true; location.href = '/chat#neueste'; return; }
+        // reload() statt location.href='/chat#neueste': die Seite STEHT auf dieser
+        // Adresse, ein Sprung dorthin tat nichts — und die Sperre unten blieb gesetzt,
+        // sodass gar nicht mehr nachgefragt wurde. Das war der eigentliche Fehler.
+        if (fertig || !d.pending) { reloading = true; armed(); location.reload(); return; }
         // Die Zahlen mit anzeigen: bleibt eine Antwort trotzdem stehen, ist ohne
         // Rückfrage erkennbar, WORAN es liegt (offen? oder Id nicht als neu erkannt?).
         say('zuletzt geprüft ' + new Date().toLocaleTimeString()
@@ -164,7 +171,7 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
   // Zusätzlich stur neu laden. Das meta-refresh im Kopf der Seite sollte das schon
   // tun — tut es nachweislich nicht immer. Dieser Weg läuft im selben Skript, von
   // dem wir wissen, dass es lebt (die Uhr oben tickt).
-  setTimeout(function () { if (!reloading) { location.href = '/chat#neueste'; } }, 8000);
+  setTimeout(function () { if (!reloading) { location.reload(); } }, 8000);
   // Browser drosseln Timer in HINTERGRUND-Tabs stark. Deshalb sofort nachfragen,
   // sobald der Tab wieder sichtbar wird — sonst wirkt eine fertige Antwort hängend.
   document.addEventListener('visibilitychange', function () {
