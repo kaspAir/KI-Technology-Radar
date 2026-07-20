@@ -118,6 +118,9 @@ class ChatMessage(Base):
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text, default="")
+    # '' = fertig · 'pending' = Berater denkt noch · 'error' = fehlgeschlagen.
+    # Die Antwort entsteht im Hintergrund, damit keine HTTP-Anfrage darauf wartet.
+    status: Mapped[str] = mapped_column(String(20), default="")
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 

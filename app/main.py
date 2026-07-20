@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import yaml
-from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -750,11 +750,14 @@ def _attachments_by_message(db, tenant_id):
 
 def _chat_history(db, tenant_id):
     """Verlauf fürs Modell: Nachrichtentext + der extrahierte Text der Anhänge,
-    klar als DOKUMENT gekennzeichnet (damit der Berater die Quelle benennen kann)."""
+    klar als DOKUMENT gekennzeichnet (damit der Berater die Quelle benennen kann).
+    Noch offene Platzhalter (status='pending') gehören nicht in den Verlauf."""
     atts = _attachments_by_message(db, tenant_id)
     hist = []
     for m in db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == tenant_id)
                         .order_by(ChatMessage.id)):
+        if m.status == "pending":
+            continue
         content = m.content
         for a in atts.get(m.id, []):
             if a.text:
@@ -774,13 +777,31 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
                       .order_by(ChatMessage.id)).all()
     return templates.TemplateResponse(request, "chat.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
+        "pending": any(m.status == "pending" for m in msgs),
         "atts": _attachments_by_message(db, user.tenant_id),
         "has_profile": bool(effective_profile(db, user.tenant_id)),
         "n_blips": len(effective_curation(db, user.tenant_id))})
 
 
+def _run_chat_answer(tenant_id: int, tenant_name: str, placeholder_id: int):
+    """Läuft im Hintergrund (eigene DB-Sitzung) — die HTTP-Antwort ist längst raus."""
+    from . import chat as _chat
+    with SessionLocal() as db:
+        try:
+            answer = _chat.ask(_chat_context(db, tenant_id, tenant_name),
+                               _chat_history(db, tenant_id))
+            status = ""
+        except Exception as e:      # unerwartet — der Platzhalter darf nicht hängen bleiben
+            answer = f"Der Berater konnte nicht antworten ({type(e).__name__}). Bitte erneut versuchen."
+            status = "error"
+        m = db.get(ChatMessage, placeholder_id)
+        if m:
+            m.content, m.status = answer, status
+            db.commit()
+
+
 @app.post("/chat")
-async def chat_send(request: Request, message: str = Form(""),
+async def chat_send(request: Request, background: BackgroundTasks, message: str = Form(""),
                     files: list[UploadFile] = File(default=[]),
                     user=Depends(current_user), db=Depends(db_session)):
     if not can_edit(user) or not user.tenant_id:
@@ -801,13 +822,25 @@ async def chat_send(request: Request, message: str = Form(""),
         db.add(ChatAttachment(tenant_id=user.tenant_id, message_id=msg.id,
                               filename=f.filename[:255], kind=kind or "?",
                               note=note[:255], text=doc))
-    db.commit()
-    history = _chat_history(db, user.tenant_id)
-    answer = _chat.ask(_chat_context(db, user.tenant_id, tenant.name if tenant else ""), history)
-    db.add(ChatMessage(tenant_id=user.tenant_id, user_id=None, role="assistant", content=answer))
-    db.commit()
-    # Anker: der Browser springt zur neuesten Antwort statt an den Seitenanfang.
+    # Platzhalter anlegen; die Antwort entsteht im HINTERGRUND, damit die
+    # HTTP-Anfrage nicht auf das Modell wartet (sonst Timeout im Proxy).
+    holder = ChatMessage(tenant_id=user.tenant_id, user_id=None, role="assistant",
+                         content="", status="pending")
+    db.add(holder); db.commit()
+    background.add_task(_run_chat_answer, user.tenant_id,
+                        tenant.name if tenant else "", holder.id)
     return RedirectResponse("/chat#neueste", 303)
+
+
+@app.post("/chat/cancel")
+def chat_cancel(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Hängengebliebene Anfrage verwerfen (z.B. nach einem Neustart mitten im Lauf)."""
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/chat", 303)
+    db.query(ChatMessage).filter(ChatMessage.tenant_id == user.tenant_id,
+                                 ChatMessage.status == "pending").delete()
+    db.commit()
+    return RedirectResponse("/chat", 303)
 
 
 @app.post("/chat/reset")
