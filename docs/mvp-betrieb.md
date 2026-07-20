@@ -44,8 +44,14 @@ RADAR_ADMIN_EMAIL=k.broennimann@gmail.com
 RADAR_ADMIN_PW=<starkes Initial-Passwort>
 RADAR_INSTANCE=/home/clients/<id>/radar-instance
 RADAR_PORT=8030
-RADAR_WORKERS=2
+RADAR_WORKERS=4
 ```
+
+> **Wichtig — Zeitlimit:** `RADAR_TIMEOUT` (Vorgabe neu 1800 s) muss deutlich über der
+> längsten Beratungsantwort liegen. Stand er auf 180 s, hielt Gunicorn den Prozess für
+> hängend und killte ihn mitten im Lauf: die bereits bezahlte Antwort war verloren und
+> die Oberfläche antwortete während des Neustarts nicht. Wer hier kürzt, holt sich genau
+> dieses Fehlerbild zurück.
 `chmod 600 ~/radar-app/.env`  ·  Zufall z.B. `openssl rand -hex 24`.
 
 **e) SSH-Deploy-Key** fürs private Instanz-Repo (nur lesend, wie bei der Ingestion),

@@ -8,7 +8,9 @@
 # Unterschied zum Dashboard: der Radar ist ASGI (FastAPI) -> Gunicorn braucht den
 # UvicornWorker. Secrets kommen aus <app>/.env (RADAR_DB, RADAR_SECRET, ...).
 PORT="${1:-8030}"
-WORKERS="${2:-2}"
+# Mehr Arbeitsprozesse: der Berater belegt während eines Laufs einen davon. Mit zwei
+# reichte ein zweiter Lauf, damit die Oberfläche nicht mehr bedient wurde.
+WORKERS="${2:-4}"
 APP="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$APP" || exit 0
 
@@ -35,6 +37,10 @@ set +a
 
 nohup .venv/bin/gunicorn app.main:app \
     -k uvicorn.workers.UvicornWorker \
-    --bind "127.0.0.1:$PORT" --workers "$WORKERS" --timeout "${RADAR_TIMEOUT:-180}" \
+    --bind "127.0.0.1:$PORT" --workers "$WORKERS" \
+    `# 180 s waren zu knapp: der Berater denkt und schreibt legitim mehrere Minuten.` \
+    `# Gunicorn hielt den Prozess für hängend und killte ihn MITTEN im Lauf — die` \
+    `# bezahlte Antwort war weg und die Oberfläche währenddessen nicht bedienbar.` \
+    --timeout "${RADAR_TIMEOUT:-1800}" --graceful-timeout 30 \
     --access-logfile logs/access.log --error-logfile logs/error.log >/dev/null 2>&1 &
 echo $! > tmp/gunicorn.pid

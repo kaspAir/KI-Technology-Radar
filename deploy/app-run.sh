@@ -10,7 +10,7 @@
 #   RADAR_SECRET=<langer Zufall, stabil halten>
 #   RADAR_ADMIN_EMAIL=... ; RADAR_ADMIN_PW=...
 #   RADAR_INSTANCE=<Pfad zum Instanz-Klon>        (optional; Default siehe unten)
-#   RADAR_PORT=8030 ; RADAR_WORKERS=2             (optional)
+#   RADAR_PORT=8030 ; RADAR_WORKERS=4             (optional)
 set -eu
 
 APP="$(cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -24,7 +24,7 @@ set -a; [ -f .env ] && . ./.env; set +a
 # Instanz-Repo (privat): per .env (RADAR_INSTANCE_GIT) überschreibbar, damit ein
 # eigener SSH-Alias genutzt werden kann, ohne globales github.com zu ändern.
 INST_URL="${RADAR_INSTANCE_GIT:-git@github.com:kaspAir/KI-Technology-Radar-Instanz.git}"
-PORT="${RADAR_PORT:-8030}"; WORKERS="${RADAR_WORKERS:-2}"
+PORT="${RADAR_PORT:-8030}"; WORKERS="${RADAR_WORKERS:-4}"
 export RADAR_INSTANCE="${RADAR_INSTANCE:-$APP/../radar-instance}"
 
 # ---- Code aktualisieren -------------------------------------------------------
