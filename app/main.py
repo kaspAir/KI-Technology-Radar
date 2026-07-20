@@ -799,6 +799,16 @@ def _expire_stale(db, tenant_id) -> None:
         db.commit()
 
 
+def _pending_seconds(db, tenant_id) -> int:
+    """Laufzeit des offenen Laufs in Sekunden (0 = nichts offen)."""
+    m = db.scalars(select(ChatMessage).where(
+        ChatMessage.tenant_id == tenant_id, ChatMessage.status == "pending")
+        .order_by(ChatMessage.id.desc())).first()
+    if not m or not m.created:
+        return 0
+    return max(0, int((_db_now(db) - m.created).total_seconds()))
+
+
 def _last_done_id(db, tenant_id) -> int:
     """Id der jüngsten FERTIGEN Nachricht. Die Seite fragt damit „hat sich etwas
     getan?" — unabhängig davon, ob irgendwo noch ein Platzhalter offen steht."""
@@ -855,7 +865,10 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
     return templates.TemplateResponse(request, "chat.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
         "pending": any(m.status == "pending" for m in msgs),
-        "last_done": _last_done_id(db, user.tenant_id),
+        "last_done": _last_done_id(db, user.tenant_id), "commit": _running_commit(),
+        # Wie lange läuft der offene Lauf WIRKLICH schon? Serverseitig gerechnet, damit
+        # die Uhr beim Neuladen der Seite nicht auf null zurückspringt.
+        "pending_secs": _pending_seconds(db, user.tenant_id),
         "ctx_chars": sum(len(m["content"]) for m in kept), "ctx_dropped": dropped,
         "ctx_budget": _chat.HISTORY_BUDGET, "n_archived": n_archived,
         "atts": _attachments_by_message(db, user.tenant_id),

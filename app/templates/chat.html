@@ -78,7 +78,8 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 {% if can_edit and pending %}
 <div class="row" style="margin-top:16px;align-items:center;gap:12px">
   <span class="muted">Die Seite aktualisiert sich automatisch, sobald die Antwort da ist.<br>
-    <span id="polled" style="font-size:12px"></span></span>
+    <span id="polled" style="font-size:12px"></span>
+    <span style="font-size:12px"> · Stand {{ commit }}</span></span>
   <form method="post" action="/chat/cancel"><button type="submit" class="ghost">Abbrechen</button></form>
 </div>
 {% elif can_edit %}
@@ -113,7 +114,9 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 <script>
 (function () {
   // Laufende Uhr: zeigt, dass wirklich gearbeitet wird.
-  var t0 = Date.now(), el = document.getElementById('elapsed');
+  // Startpunkt kommt vom Server: die Uhr zeigt die echte Laufzeit weiter, auch
+  // wenn die Seite zwischendurch neu geladen hat.
+  var t0 = Date.now() - {{ pending_secs }} * 1000, el = document.getElementById('elapsed');
   function tick() {
     if (!el) return;
     var s = Math.floor((Date.now() - t0) / 1000);
@@ -155,6 +158,10 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
   // nicht noch drei Sekunden liegen bleibt.
   check();
   setInterval(check, 3000);
+  // Zusätzlich stur neu laden. Das meta-refresh im Kopf der Seite sollte das schon
+  // tun — tut es nachweislich nicht immer. Dieser Weg läuft im selben Skript, von
+  // dem wir wissen, dass es lebt (die Uhr oben tickt).
+  setTimeout(function () { if (!reloading) { location.href = '/chat#neueste'; } }, 8000);
   // Browser drosseln Timer in HINTERGRUND-Tabs stark. Deshalb sofort nachfragen,
   // sobald der Tab wieder sichtbar wird — sonst wirkt eine fertige Antwort hängend.
   document.addEventListener('visibilitychange', function () {
