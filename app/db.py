@@ -124,6 +124,9 @@ class ChatMessage(Base):
     # „Zurücksetzen" ARCHIVIERT statt zu löschen: ein neues Gespräch beginnt frisch,
     # das alte bleibt nachlesbar. Zerstörende Knöpfe ohne Rückweg gehören nicht ins Produkt.
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Lebenszeichen während des Laufs (z.B. „denkt · 1'200 Zeichen"). Sichtbarer Beleg,
+    # dass gearbeitet wird — solange das Modell denkt, kommt noch kein Antworttext.
+    progress: Mapped[str] = mapped_column(String(120), default="")
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 

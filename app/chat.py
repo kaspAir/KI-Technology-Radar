@@ -138,7 +138,7 @@ def fit_history(history: list):
     return hist, dropped
 
 
-def ask(context: str, history: list, on_text=None) -> str:
+def ask(context: str, history: list, on_text=None, on_think=None) -> str:
     """Stellt die Frage an das Modell. history = [{'role':..., 'content':...}, ...].
     Rückgabe: Antworttext (oder eine ehrliche Fehlermeldung).
 
@@ -178,10 +178,21 @@ def ask(context: str, history: list, on_text=None) -> str:
             system=system,
             messages=msgs,
         ) as stream:
-            for chunk in stream.text_stream:
-                parts.append(chunk)
-                if on_text:
-                    on_text(_inbound("".join(parts)))
+            denk = 0
+            for ev in stream:
+                if getattr(ev, "type", "") != "content_block_delta":
+                    continue
+                d = ev.delta
+                kind = getattr(d, "type", "")
+                if kind == "text_delta":
+                    parts.append(d.text)
+                    if on_text:
+                        on_text(_inbound("".join(parts)))
+                elif kind == "thinking_delta" and on_think:
+                    # Vor dem Schreiben DENKT das Modell — teils minutenlang. Ohne
+                    # Lebenszeichen sieht das aus wie ein Hänger.
+                    denk += len(getattr(d, "thinking", "") or "")
+                    on_think(denk)
             resp = stream.get_final_message()
         if resp.stop_reason == "refusal":
             return "Diese Anfrage wurde aus Sicherheitsgründen abgelehnt. Bitte formuliere sie anders."

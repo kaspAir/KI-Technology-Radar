@@ -881,9 +881,20 @@ def _run_chat_answer(tenant_id: int, tenant_name: str, placeholder_id: int):
                 m.content = text
                 db.commit()
 
+        def _save_think(chars: int) -> None:
+            """Lebenszeichen, solange noch kein Antworttext da ist."""
+            if time.monotonic() - last[0] < CHAT_SAVE_EVERY:
+                return
+            last[0] = time.monotonic()
+            m = db.get(ChatMessage, placeholder_id)
+            if m and m.status == "pending":
+                m.progress = "denkt · {:,} Zeichen".format(chars).replace(",", "’")
+                db.commit()
+
         try:
             answer = _chat.ask(_chat_context(db, tenant_id, tenant_name),
-                               _chat_history(db, tenant_id), on_text=_save_partial)
+                               _chat_history(db, tenant_id),
+                               on_text=_save_partial, on_think=_save_think)
             status = ""
         except Exception as e:      # unerwartet — der Platzhalter darf nicht hängen bleiben
             db.rollback()
