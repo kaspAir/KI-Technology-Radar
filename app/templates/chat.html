@@ -136,9 +136,15 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
       .then(function (d) {
         // 'done' = jüngste FERTIGE Antwort. Fehlt das Feld, läuft eine ältere
         // Fassung auf dem Server — dann nur auf 'pending' stützen.
-        var fertig = (typeof d.done === 'number') ? (d.done > seen) : false;
+        // Auf UNGLEICH prüfen, nicht auf grösser: die Seite soll auch dann nachladen,
+        // wenn sich der Stand anders bewegt hat als erwartet.
+        var fertig = (typeof d.done === 'number') ? (d.done !== seen) : false;
         if (fertig || !d.pending) { reloading = true; location.href = '/chat#neueste'; return; }
-        say('zuletzt geprüft ' + new Date().toLocaleTimeString());
+        // Die Zahlen mit anzeigen: bleibt eine Antwort trotzdem stehen, ist ohne
+        // Rückfrage erkennbar, WORAN es liegt (offen? oder Id nicht als neu erkannt?).
+        say('zuletzt geprüft ' + new Date().toLocaleTimeString()
+            + ' · offen: ' + (d.pending ? 'ja' : 'nein')
+            + ' · fertig #' + d.done + ' (Seite kennt #' + seen + ')');
       })
       // Fehler NICHT verschlucken: sonst steht die Seite still und niemand weiss warum.
       // Die Seite lädt ohnehin alle 8 s selbst nach — das hier ist die Erklärung dazu.

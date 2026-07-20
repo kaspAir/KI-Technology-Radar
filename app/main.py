@@ -26,7 +26,7 @@ from fastapi.responses import (HTMLResponse, JSONResponse, PlainTextResponse,
                                RedirectResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -798,10 +798,12 @@ def _expire_stale(db, tenant_id) -> None:
 def _last_done_id(db, tenant_id) -> int:
     """Id der jüngsten FERTIGEN Nachricht. Die Seite fragt damit „hat sich etwas
     getan?" — unabhängig davon, ob irgendwo noch ein Platzhalter offen steht."""
+    # Achtung MariaDB: `status != 'pending'` ist bei NULL weder wahr noch falsch — solche
+    # Zeilen fielen stillschweigend raus (Altbestand vor der Spalte). Darum ausdrücklich.
     return db.scalar(select(func.max(ChatMessage.id)).where(
         ChatMessage.tenant_id == tenant_id,
         ChatMessage.archived == False,                 # noqa: E712
-        ChatMessage.status != "pending")) or 0
+        or_(ChatMessage.status.is_(None), ChatMessage.status != "pending"))) or 0
 
 
 def _chat_history(db, tenant_id):
