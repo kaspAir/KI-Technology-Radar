@@ -38,6 +38,12 @@
 auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 <b>Vorschläge</b>; entschieden wird von euch.</p>
 
+{% if msgs %}
+<p class="muted" style="margin:-8px 0 14px">Gesprächsumfang ≈ {{ '{:,}'.format(ctx_chars).replace(',', '’') }} Zeichen
+  ({{ (ctx_chars * 100 // ctx_budget) }} % des Rahmens){% if ctx_dropped %} ·
+  <b>die {{ ctx_dropped }} ältesten Beiträge werden nicht mehr mitgeschickt</b> — der Radar-Kontext bleibt vollständig{% endif %}.</p>
+{% endif %}
+
 {% if not has_profile or n_blips == 0 %}
 <div class="card" style="border-left:3px solid var(--gold)">
   Für ein gutes Gespräch fehlt noch Grundlage:

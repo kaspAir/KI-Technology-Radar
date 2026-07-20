@@ -21,6 +21,11 @@ MAX_TOKENS = int(os.environ.get("RADAR_CHAT_MAX_TOKENS", "8000"))
 # „medium" hält den Chat antwortfreudig; für tiefere Analysen auf „high" stellen.
 EFFORT = os.environ.get("RADAR_CHAT_EFFORT", "medium")
 MAX_TURNS = int(os.environ.get("RADAR_CHAT_MAX_TURNS", "40"))   # Verlauf, den wir mitsenden
+# Obergrenze für den mitgesendeten Verlauf. Wird sie überschritten, fallen die
+# ÄLTESTEN Nachrichten weg (die jüngsten bleiben immer) — sonst wächst jede
+# Antwort langsamer und teurer als die vorige.
+HISTORY_BUDGET = int(os.environ.get("RADAR_CHAT_BUDGET_CHARS", "120000"))
+KEEP_LAST = int(os.environ.get("RADAR_CHAT_KEEP_LAST", "6"))    # nie wegkürzen
 
 RING_MEAN = {"Adopt": "produktiv nutzen", "Pilot": "real erproben",
              "Explore": "aktiv erkunden", "Watch": "beobachten",
@@ -118,6 +123,18 @@ def build_context(tenant_name: str, profile: dict, blips: list, field_labels: di
     return "\n".join(out)
 
 
+def fit_history(history: list):
+    """Kürzt den Verlauf auf das Budget: die jüngsten KEEP_LAST Nachrichten bleiben
+    immer, davor fallen die ältesten weg. Rückgabe: (behalten, weggelassen).
+    Bewusst deterministisch und sichtbar — nichts wird stillschweigend verdichtet."""
+    hist = history[-MAX_TURNS:]
+    dropped = len(history) - len(hist)
+    while len(hist) > KEEP_LAST and sum(len(m["content"]) for m in hist) > HISTORY_BUDGET:
+        hist = hist[1:]
+        dropped += 1
+    return hist, dropped
+
+
 def ask(context: str, history: list) -> str:
     """Stellt die Frage an das Modell. history = [{'role':..., 'content':...}, ...].
     Rückgabe: Antworttext (oder eine ehrliche Fehlermeldung)."""
@@ -131,7 +148,13 @@ def ask(context: str, history: list) -> str:
 
     system = [{"type": "text", "text": _outbound(RULES + "\n\n" + context),
                "cache_control": {"type": "ephemeral"}}]
-    msgs = [{"role": m["role"], "content": _outbound(m["content"])} for m in history[-MAX_TURNS:]]
+    kept, dropped = fit_history(history)
+    if dropped:
+        kept = [{"role": "user", "content":
+                 f"(Hinweis: die {dropped} ältesten Beiträge dieses Gesprächs sind aus "
+                 "Platzgründen nicht mehr enthalten. Der Radar-Kontext oben ist vollständig. "
+                 "Frage nach, falls dir etwas Vorheriges fehlt.)"}] + kept
+    msgs = [{"role": m["role"], "content": _outbound(m["content"])} for m in kept]
     try:
         client = anthropic.Anthropic()
         resp = client.messages.create(
@@ -139,6 +162,9 @@ def ask(context: str, history: list) -> str:
             max_tokens=MAX_TOKENS,
             thinking={"type": "adaptive"},
             output_config={"effort": EFFORT},
+            # Verlauf zwischenspeichern: Folgeantworten lesen ihn, statt ihn neu
+            # zu verarbeiten — deutlich schneller und günstiger.
+            cache_control={"type": "ephemeral"},
             system=system,
             messages=msgs,
         )

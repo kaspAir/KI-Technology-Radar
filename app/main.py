@@ -11,6 +11,7 @@ Umgebung: RADAR_DB, RADAR_SECRET, RADAR_INSTANCE, RADAR_ADMIN_EMAIL/PW (Bootstra
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import html as _html
 import json
 import os
@@ -754,14 +755,21 @@ def _chat_history(db, tenant_id):
     klar als DOKUMENT gekennzeichnet (damit der Berater die Quelle benennen kann).
     Noch offene Platzhalter (status='pending') gehören nicht in den Verlauf."""
     atts = _attachments_by_message(db, tenant_id)
-    hist = []
+    hist, seen = [], set()
     for m in db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == tenant_id)
                         .order_by(ChatMessage.id)):
         if m.status == "pending":
             continue
         content = m.content
         for a in atts.get(m.id, []):
-            if a.text:
+            if not a.text:
+                continue
+            key = hashlib.sha256(a.text.encode("utf-8")).hexdigest()
+            if key in seen:     # dasselbe Dokument nochmals hochgeladen -> nicht wiederholen
+                content += (f"\n\n(Dokument {a.filename}: inhaltlich identisch mit einem "
+                            "bereits weiter oben enthaltenen — Inhalt nicht wiederholt.)")
+            else:
+                seen.add(key)
                 content += (f"\n\n--- DOKUMENT: {a.filename} ({a.kind}) ---\n"
                             f"{a.text}\n--- ENDE DOKUMENT ---")
         hist.append({"role": m.role, "content": content})
@@ -774,11 +782,15 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
         return RedirectResponse("/login", 302)
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
+    from . import chat as _chat
     msgs = db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id)
                       .order_by(ChatMessage.id)).all()
+    kept, dropped = _chat.fit_history(_chat_history(db, user.tenant_id))
     return templates.TemplateResponse(request, "chat.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
         "pending": any(m.status == "pending" for m in msgs),
+        "ctx_chars": sum(len(m["content"]) for m in kept), "ctx_dropped": dropped,
+        "ctx_budget": _chat.HISTORY_BUDGET,
         "atts": _attachments_by_message(db, user.tenant_id),
         "has_profile": bool(effective_profile(db, user.tenant_id)),
         "n_blips": len(effective_curation(db, user.tenant_id))})
