@@ -26,6 +26,9 @@ MAX_TURNS = int(os.environ.get("RADAR_CHAT_MAX_TURNS", "40"))   # Verlauf, den w
 # Antwort langsamer und teurer als die vorige.
 HISTORY_BUDGET = int(os.environ.get("RADAR_CHAT_BUDGET_CHARS", "120000"))
 KEEP_LAST = int(os.environ.get("RADAR_CHAT_KEEP_LAST", "6"))    # nie wegkürzen
+# Grosszügig: der Berater darf lange denken. Gestreamt ist der Text ohnehin laufend
+# gesichert, ein Zeitlimit vernichtet also keine bezahlte Antwort mehr.
+STREAM_TIMEOUT = float(os.environ.get("RADAR_CHAT_TIMEOUT", "900"))
 
 RING_MEAN = {"Adopt": "produktiv nutzen", "Pilot": "real erproben",
              "Explore": "aktiv erkunden", "Watch": "beobachten",
@@ -135,9 +138,15 @@ def fit_history(history: list):
     return hist, dropped
 
 
-def ask(context: str, history: list) -> str:
+def ask(context: str, history: list, on_text=None) -> str:
     """Stellt die Frage an das Modell. history = [{'role':..., 'content':...}, ...].
-    Rückgabe: Antworttext (oder eine ehrliche Fehlermeldung)."""
+    Rückgabe: Antworttext (oder eine ehrliche Fehlermeldung).
+
+    Die Antwort wird GESTREAMT: on_text(bisheriger_text) wird während des Schreibens
+    aufgerufen. Das ist keine Kosmetik — bei einer Antwort am Stück liegt alles bis
+    zum Schluss nur im Speicher, und ein Neustart oder Zeitlimit unterwegs vernichtet
+    eine bereits bezahlte Antwort. Gestreamt ist der Text nach jedem Stück gesichert.
+    """
     try:
         import anthropic
     except ImportError:
@@ -156,8 +165,9 @@ def ask(context: str, history: list) -> str:
                  "Frage nach, falls dir etwas Vorheriges fehlt.)"}] + kept
     msgs = [{"role": m["role"], "content": _outbound(m["content"])} for m in kept]
     try:
-        client = anthropic.Anthropic()
-        resp = client.messages.create(
+        client = anthropic.Anthropic(timeout=STREAM_TIMEOUT)
+        parts: list = []
+        with client.messages.stream(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             thinking={"type": "adaptive"},
@@ -167,11 +177,15 @@ def ask(context: str, history: list) -> str:
             cache_control={"type": "ephemeral"},
             system=system,
             messages=msgs,
-        )
+        ) as stream:
+            for chunk in stream.text_stream:
+                parts.append(chunk)
+                if on_text:
+                    on_text(_inbound("".join(parts)))
+            resp = stream.get_final_message()
         if resp.stop_reason == "refusal":
             return "Diese Anfrage wurde aus Sicherheitsgründen abgelehnt. Bitte formuliere sie anders."
-        text = next((b.text for b in resp.content if b.type == "text"), "")
-        return _inbound(text) or "(keine Antwort erhalten)"
+        return _inbound("".join(parts)) or "(keine Antwort erhalten)"
     except anthropic.RateLimitError:
         return "Zu viele Anfragen — bitte kurz warten und erneut senden."
     except anthropic.AuthenticationError:

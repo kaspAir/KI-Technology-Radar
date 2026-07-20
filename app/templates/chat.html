@@ -62,7 +62,8 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 {% for m in msgs %}
 <div class="msg {{ 'me' if m.role=='user' else 'bot' }}"{% if loop.last %} id="neueste"{% endif %}>
   <div class="who">{{ 'Ihr' if m.role=='user' else 'Berater' }}</div>
-  <div class="txt">{% if m.status == 'pending' %}<span class="think"><i></i><i></i><i></i></span><span class="muted">Der Berater denkt nach <span id="elapsed"></span> — bei langem Verlauf oder grossen Anhängen einige Minuten.</span><div class="bar"><span></span></div>{% else %}{{ m.content }}{% endif %}</div>
+  <div class="txt">{% if m.status == 'pending' %}{% if m.content %}{{ m.content }}
+{% endif %}<span class="think"><i></i><i></i><i></i></span><span class="muted">{% if m.content %}Der Berater schreibt{% else %}Der Berater denkt nach{% endif %} <span id="elapsed"></span>{% if not m.content %} — bei langem Verlauf oder grossen Anhängen einige Minuten.{% endif %}</span><div class="bar"><span></span></div>{% else %}{{ m.content }}{% endif %}</div>
   {% for a in atts.get(m.id, []) %}
     <div class="att">📎 <b>{{ a.filename }}</b> <span class="muted">({{ a.kind }}{% if a.note %} · {{ a.note }}{% endif %})</span>
       {% if not a.text %}<span style="color:#b3261e"> — nicht auswertbar</span>{% endif %}</div>

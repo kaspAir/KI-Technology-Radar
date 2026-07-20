@@ -765,7 +765,11 @@ def _attachments_by_message(db, tenant_id):
 
 # Ein Platzhalter, der so lange offen ist, wurde von niemandem mehr beantwortet
 # (Neustart, abgestürzter Worker). Er darf die Seite nicht ewig blockieren.
-CHAT_STALE_SECONDS = int(os.environ.get("RADAR_CHAT_STALE_SECONDS", "900"))
+# Muss GRÖSSER sein als das Zeitlimit des Laufs selbst (chat.STREAM_TIMEOUT) — sonst
+# erklären wir eine Antwort für verloren, die noch ganz normal geschrieben wird.
+CHAT_STALE_SECONDS = int(os.environ.get("RADAR_CHAT_STALE_SECONDS", "1200"))
+# Abstand, in dem der entstehende Antworttext zwischengespeichert wird.
+CHAT_SAVE_EVERY = float(os.environ.get("RADAR_CHAT_SAVE_EVERY", "3"))
 
 
 def _db_now(db):
@@ -861,14 +865,34 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
 
 def _run_chat_answer(tenant_id: int, tenant_name: str, placeholder_id: int):
     """Läuft im Hintergrund (eigene DB-Sitzung) — die HTTP-Antwort ist längst raus."""
+    import time
     from . import chat as _chat
     with SessionLocal() as db:
+        last = [0.0]
+
+        def _save_partial(text: str) -> None:
+            """Zwischenstand sichern — höchstens alle paar Sekunden, damit die Datenbank
+            nicht bei jedem Wort schreibt. So überlebt der Text einen Neustart."""
+            if time.monotonic() - last[0] < CHAT_SAVE_EVERY:
+                return
+            last[0] = time.monotonic()
+            m = db.get(ChatMessage, placeholder_id)
+            if m and m.status == "pending":     # abgebrochen? dann nicht mehr schreiben
+                m.content = text
+                db.commit()
+
         try:
             answer = _chat.ask(_chat_context(db, tenant_id, tenant_name),
-                               _chat_history(db, tenant_id))
+                               _chat_history(db, tenant_id), on_text=_save_partial)
             status = ""
         except Exception as e:      # unerwartet — der Platzhalter darf nicht hängen bleiben
-            answer = f"Der Berater konnte nicht antworten ({type(e).__name__}). Bitte erneut versuchen."
+            db.rollback()
+            m = db.get(ChatMessage, placeholder_id)
+            teil = (m.content if m else "") or ""
+            answer = (f"Der Berater konnte nicht zu Ende antworten ({type(e).__name__}). "
+                      "Bitte erneut versuchen.")
+            if teil:    # schon geschriebener Text ist bezahlt — er bleibt erhalten
+                answer = teil + "\n\n— — —\n" + answer
             status = "error"
         m = db.get(ChatMessage, placeholder_id)
         if m:
