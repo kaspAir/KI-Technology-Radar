@@ -38,8 +38,11 @@
 auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 <b>Vorschläge</b>; entschieden wird von euch.</p>
 
+{% if n_archived %}
+<p class="muted" style="margin:-8px 0 12px"><a href="/chat/archiv" style="color:var(--gold)">Frühere Gespräche ansehen</a> ({{ n_archived }} archivierte Beiträge)</p>
+{% endif %}
 {% if msgs %}
-<p class="muted" style="margin:-8px 0 14px">Gesprächsumfang ≈ {{ '{:,}'.format(ctx_chars).replace(',', '’') }} Zeichen
+<p class="muted" style="margin:-4px 0 14px">Gesprächsumfang ≈ {{ '{:,}'.format(ctx_chars).replace(',', '’') }} Zeichen
   ({{ (ctx_chars * 100 // ctx_budget) }} % des Rahmens){% if ctx_dropped %} ·
   <b>die {{ ctx_dropped }} ältesten Beiträge werden nicht mehr mitgeschickt</b> — der Radar-Kontext bleibt vollständig{% endif %}.</p>
 {% endif %}
@@ -91,8 +94,10 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
   </div>
 </form>
 {% if msgs %}
-<form method="post" action="/chat/reset" style="margin-top:10px">
-  <button type="submit" class="ghost">Gespräch zurücksetzen</button>
+<form method="post" action="/chat/reset" style="margin-top:10px"
+      onsubmit="return confirm('Neues Gespräch beginnen?\n\nDas bisherige wird ARCHIVIERT und bleibt unter „Frühere Gespräche“ lesbar — es geht nichts verloren.');">
+  <button type="submit" class="ghost">Neues Gespräch beginnen</button>
+  <span class="muted" style="margin-left:8px">Das bisherige wird archiviert, nicht gelöscht.</span>
 </form>
 {% endif %}
 {% else %}

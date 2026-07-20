@@ -121,6 +121,9 @@ class ChatMessage(Base):
     # '' = fertig · 'pending' = Berater denkt noch · 'error' = fehlgeschlagen.
     # Die Antwort entsteht im Hintergrund, damit keine HTTP-Anfrage darauf wartet.
     status: Mapped[str] = mapped_column(String(20), default="")
+    # „Zurücksetzen" ARCHIVIERT statt zu löschen: ein neues Gespräch beginnt frisch,
+    # das alte bleibt nachlesbar. Zerstörende Knöpfe ohne Rückweg gehören nicht ins Produkt.
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 

@@ -756,7 +756,8 @@ def _chat_history(db, tenant_id):
     Noch offene Platzhalter (status='pending') gehören nicht in den Verlauf."""
     atts = _attachments_by_message(db, tenant_id)
     hist, seen = [], set()
-    for m in db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == tenant_id)
+    for m in db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == tenant_id,
+                                                  ChatMessage.archived == False)  # noqa: E712
                         .order_by(ChatMessage.id)):
         if m.status == "pending":
             continue
@@ -783,14 +784,17 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
     from . import chat as _chat
-    msgs = db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id)
+    msgs = db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id,
+                                                ChatMessage.archived == False)  # noqa: E712
                       .order_by(ChatMessage.id)).all()
+    n_archived = db.scalar(select(func.count()).select_from(ChatMessage).where(
+        ChatMessage.tenant_id == user.tenant_id, ChatMessage.archived == True)) or 0  # noqa: E712
     kept, dropped = _chat.fit_history(_chat_history(db, user.tenant_id))
     return templates.TemplateResponse(request, "chat.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
         "pending": any(m.status == "pending" for m in msgs),
         "ctx_chars": sum(len(m["content"]) for m in kept), "ctx_dropped": dropped,
-        "ctx_budget": _chat.HISTORY_BUDGET,
+        "ctx_budget": _chat.HISTORY_BUDGET, "n_archived": n_archived,
         "atts": _attachments_by_message(db, user.tenant_id),
         "has_profile": bool(effective_profile(db, user.tenant_id)),
         "n_blips": len(effective_curation(db, user.tenant_id))})
@@ -870,10 +874,27 @@ def chat_cancel(request: Request, user=Depends(current_user), db=Depends(db_sess
 def chat_reset(request: Request, user=Depends(current_user), db=Depends(db_session)):
     if not can_edit(user) or not user.tenant_id:
         return RedirectResponse("/chat", 303)
-    db.query(ChatAttachment).filter(ChatAttachment.tenant_id == user.tenant_id).delete()
-    db.query(ChatMessage).filter(ChatMessage.tenant_id == user.tenant_id).delete()
+    # ARCHIVIEREN statt löschen — das alte Gespräch bleibt unter /chat/archiv lesbar.
+    db.query(ChatMessage).filter(ChatMessage.tenant_id == user.tenant_id,
+                                 ChatMessage.archived == False).update(  # noqa: E712
+        {"archived": True})
     db.commit()
     return RedirectResponse("/chat", 303)
+
+
+@app.get("/chat/archiv", response_class=HTMLResponse)
+def chat_archive(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Frühere Gespräche — nur lesen, nichts geht mehr verloren."""
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    msgs = db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id,
+                                                ChatMessage.archived == True)  # noqa: E712
+                      .order_by(ChatMessage.id)).all()
+    return templates.TemplateResponse(request, "chat_archiv.html", {
+        **_nav(user, db), "active": "chat", "msgs": msgs,
+        "atts": _attachments_by_message(db, user.tenant_id)})
 
 
 @app.get("/markt", response_class=HTMLResponse)
