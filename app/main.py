@@ -519,6 +519,27 @@ def team_remove_user(request: Request, user_id: int = Form(...), user=Depends(cu
     return RedirectResponse("/team?ok=rm", 303)
 
 
+@app.post("/team/mandant-leeren")
+def team_wipe_tenant(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Testhilfe: alle EIGENEN Inhalte des Mandanten löschen — Profil, Profil-Entwurf,
+    eigene Kuratierung samt Historie, Berater- und Erstgespräche mit Anhängen. NUR die
+    eigene Ebene; geerbter Referenz-Grundstock, Nutzer, Untermandanten und deren Daten
+    bleiben. HARTE Löschung (kein Archiv) — bewusst, weil es eine Zurücksetzung ist.
+    Nur Mandanten-Admin."""
+    if not can_manage(user) or not user.tenant_id:
+        return RedirectResponse("/team", 303)
+    tid = user.tenant_id
+    db.query(ChatAttachment).filter(ChatAttachment.tenant_id == tid).delete()
+    db.query(ChatMessage).filter(ChatMessage.tenant_id == tid).delete()
+    db.query(CurationEvent).filter(CurationEvent.tenant_id == tid).delete()
+    db.query(Curation).filter(Curation.tenant_id == tid).delete()
+    for row in (db.get(ProfileDraft, tid), db.get(Profile, tid)):
+        if row:
+            db.delete(row)
+    db.commit()
+    return RedirectResponse("/team?ok=leer", 303)
+
+
 # --- Vorschläge (geteilter Pool) + mein Radar (pro Mandant) ------------------
 @app.get("/proposals", response_class=HTMLResponse)
 def proposals(request: Request, b: str = "", user=Depends(current_user), db=Depends(db_session)):

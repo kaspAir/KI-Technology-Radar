@@ -4,7 +4,8 @@
 <p class="sub">Nutzer deiner Organisation <b>{{ tenant.name }}</b> verwalten und
 Untermandanten (z.B. Abteilungen) anlegen. Untermandanten haben ihre eigene
 Instanz und erben deine Profil-Vorgaben.</p>
-{% if request.query_params.get('ok') %}<div class="card" style="border-left:3px solid #2e7d32">✓ Gespeichert.</div>{% endif %}
+{% if request.query_params.get('ok')=='leer' %}<div class="card" style="border-left:3px solid #2e7d32">✓ Mandanten-Inhalte gelöscht — der Mandant ist jetzt leer (geerbter Grundstock bleibt).</div>
+{% elif request.query_params.get('ok') %}<div class="card" style="border-left:3px solid #2e7d32">✓ Gespeichert.</div>{% endif %}
 {% if request.query_params.get('err') %}<div class="err">Bitte prüfen (E-Mail eindeutig, Passwort ≥ 8).</div>{% endif %}
 
 <h2 style="font-size:16px;color:var(--gold);margin:20px 0 6px">Nutzer ({{ tenant.name }})</h2>
@@ -50,4 +51,17 @@ Instanz und erben deine Profil-Vorgaben.</p>
   </div>
   <p class="muted" style="margin-top:8px">Danach kannst du oben Nutzer für den Untermandanten anlegen.</p>
 </form>
+
+<h2 style="font-size:16px;color:#b3261e;margin:28px 0 6px">Testbereich</h2>
+<div class="card" style="border-left:3px solid #b3261e">
+  <p class="sum" style="margin-top:0"><b>Mandanten-Inhalte löschen.</b> Entfernt <b>unwiderruflich</b>
+  alle eigenen Inhalte von <b>{{ tenant.name }}</b>: Profil und Profil-Entwurf, die eigene
+  Kuratierung samt Verlauf, sowie Berater- und Erstgespräche mit Anhängen.</p>
+  <p class="muted" style="margin:0 0 10px">Bleibt erhalten: der geerbte Referenz-Grundstock,
+  die Nutzer, Untermandanten und deren Daten. Gedacht als Zurücksetzung für Tests.</p>
+  <form method="post" action="/team/mandant-leeren"
+        onsubmit="return confirm('Wirklich ALLE eigenen Inhalte von {{ tenant.name }} löschen?\n\nProfil, Entwurf, eigene Kuratierung und alle Gespräche werden unwiderruflich entfernt. Der geerbte Grundstock und die Nutzer bleiben.');">
+    <button type="submit" style="background:#b3261e">Mandanten-Inhalte löschen</button>
+  </form>
+</div>
 {% endblock %}
