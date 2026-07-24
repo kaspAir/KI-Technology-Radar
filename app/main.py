@@ -30,8 +30,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
-from .db import (ChatAttachment, ChatMessage, Curation, CurationEvent, Profile,
-                 ProfileDraft, Proposal, ROLES, SessionLocal, Tenant, User, init_db)
+from .db import (ChatAttachment, ChatMessage, Curation, CurationDraft, CurationEvent,
+                 Profile, ProfileDraft, Proposal, ROLES, SessionLocal, Tenant, User, init_db)
 from .security import hash_pw, verify_pw
 
 RINGS = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
@@ -531,6 +531,7 @@ def team_wipe_tenant(request: Request, user=Depends(current_user), db=Depends(db
     tid = user.tenant_id
     db.query(ChatAttachment).filter(ChatAttachment.tenant_id == tid).delete()
     db.query(ChatMessage).filter(ChatMessage.tenant_id == tid).delete()
+    db.query(CurationDraft).filter(CurationDraft.tenant_id == tid).delete()
     db.query(CurationEvent).filter(CurationEvent.tenant_id == tid).delete()
     db.query(Curation).filter(Curation.tenant_id == tid).delete()
     for row in (db.get(ProfileDraft, tid), db.get(Profile, tid)):
@@ -1170,6 +1171,141 @@ def onboarding_draft(request: Request, user=Depends(current_user), db=Depends(db
         db.add(ProfileDraft(tenant_id=user.tenant_id, data=payload))
     db.commit()
     return RedirectResponse("/profil?entwurf=1", 303)
+
+
+# ======================================================================================
+# Erstkuratierung (Phase 2): der Berater schlägt aus dem GANZEN Pool passende Blips mit
+# Ring vor (geerdet auf Profil + echte Pool-Einträge, E8). Der Mensch nimmt sie auf oder
+# verwirft sie (E4). Vorschläge liegen als CurationDraft, bis sie ratifiziert werden.
+# ======================================================================================
+
+CURATION_POOL_MAX = int(os.environ.get("RADAR_CURATION_POOL_MAX", "200"))
+
+
+def _profile_text(db, tenant_id) -> str:
+    """Kompakter Profil-Block als Erdung für den Kuratierungs-Vorschlag."""
+    prof = effective_profile(db, tenant_id)
+    lines = ["# Profil dieses Mandanten"]
+    for key, label, typ, opt in PROFILE_FIELDS:
+        if key == "§":
+            continue
+        v = prof.get(key)
+        if v in (None, "", [], {}):
+            continue
+        vv = ", ".join(str(x) for x in v) if isinstance(v, list) else str(v)
+        lines.append(f"- {label}: {vv}")
+    if len(lines) == 1:
+        lines.append("- (Profil noch leer)")
+    return "\n".join(lines)
+
+
+def _accept_curation(db, tenant_id, proposal_id, ring) -> None:
+    """Einen Blip ratifizieren: eigene Wertung setzen + Historie schreiben (idempotent)."""
+    if ring not in RINGS:
+        ring = "Watch"
+    c = db.scalar(select(Curation).where(Curation.tenant_id == tenant_id,
+                                         Curation.proposal_id == proposal_id))
+    if c:
+        c.ring = ring
+    else:
+        db.add(Curation(tenant_id=tenant_id, proposal_id=proposal_id, ring=ring))
+    _log_curation_event(db, tenant_id, proposal_id, ring)
+
+
+@app.get("/kuratierung", response_class=HTMLResponse)
+def kuratierung_page(request: Request, err: str = "", user=Depends(current_user),
+                     db=Depends(db_session)):
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    drafts = db.scalars(select(CurationDraft).where(
+        CurationDraft.tenant_id == user.tenant_id).order_by(CurationDraft.id)).all()
+    props = {p.id: p for p in db.scalars(select(Proposal).where(
+        Proposal.id.in_([d.proposal_id for d in drafts])))} if drafts else {}
+    order = {r: i for i, r in enumerate(RINGS)}
+    rows = sorted([{"d": d, "p": props[d.proposal_id]} for d in drafts if d.proposal_id in props],
+                  key=lambda x: order.get(x["d"].ring, 9))
+    return templates.TemplateResponse(request, "kuratierung.html", {
+        **_nav(user, db), "active": "proposals", "rows": rows, "rings": RINGS,
+        "has_profile": bool(effective_profile(db, user.tenant_id)), "err": err})
+
+
+@app.post("/kuratierung/vorschlag")
+def kuratierung_suggest(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Berater-Vorschlag aus dem ganzen Pool erzeugen (ersetzt bestehende Vorschläge)."""
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/kuratierung", 303)
+    if not effective_profile(db, user.tenant_id):
+        return RedirectResponse("/kuratierung?err=profil", 303)
+    from . import chat as _chat
+    mine = {d["prop"].id for d in effective_curation(db, user.tenant_id)}
+    pool_props = [p for p in db.scalars(select(Proposal).order_by(
+        Proposal.relevance_general.desc(), Proposal.id.desc())) if p.id not in mine]
+    pool = [{"id": p.id, "title": p.title, "branchen": p.branchen, "summary": p.summary}
+            for p in pool_props[:CURATION_POOL_MAX]]
+    if not pool:
+        return RedirectResponse("/kuratierung?err=leer", 303)
+    sugg, err = _chat.suggest_curation(_profile_text(db, user.tenant_id), pool, RINGS)
+    if err or sugg is None:
+        return RedirectResponse("/kuratierung?err=1", 303)
+    # ids GEGEN den echten Pool validieren — erfundene ids erreichen die DB nie (E8)
+    poolids = {p["id"] for p in pool}
+    db.query(CurationDraft).filter(CurationDraft.tenant_id == user.tenant_id).delete()
+    seen = set()
+    for s in sugg:
+        pid, ring = s.get("id"), s.get("ring")
+        if pid not in poolids or ring not in RINGS or pid in seen:
+            continue
+        seen.add(pid)
+        db.add(CurationDraft(tenant_id=user.tenant_id, proposal_id=pid, ring=ring,
+                             reason=(s.get("begruendung") or "")[:2000]))
+    db.commit()
+    return RedirectResponse("/kuratierung", 303)
+
+
+@app.post("/kuratierung/aufnehmen")
+def kuratierung_accept(request: Request, proposal_id: int = Form(...), ring: str = Form("Watch"),
+                       user=Depends(current_user), db=Depends(db_session)):
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/kuratierung", 303)
+    _accept_curation(db, user.tenant_id, proposal_id, ring)
+    db.query(CurationDraft).filter(CurationDraft.tenant_id == user.tenant_id,
+                                   CurationDraft.proposal_id == proposal_id).delete()
+    db.commit()
+    return RedirectResponse("/kuratierung", 303)
+
+
+@app.post("/kuratierung/verwerfen")
+def kuratierung_reject(request: Request, proposal_id: int = Form(...),
+                       user=Depends(current_user), db=Depends(db_session)):
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/kuratierung", 303)
+    db.query(CurationDraft).filter(CurationDraft.tenant_id == user.tenant_id,
+                                   CurationDraft.proposal_id == proposal_id).delete()
+    db.commit()
+    return RedirectResponse("/kuratierung", 303)
+
+
+@app.post("/kuratierung/alle-aufnehmen")
+def kuratierung_accept_all(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/kuratierung", 303)
+    for d in db.scalars(select(CurationDraft).where(
+            CurationDraft.tenant_id == user.tenant_id)).all():
+        _accept_curation(db, user.tenant_id, d.proposal_id, d.ring)
+    db.query(CurationDraft).filter(CurationDraft.tenant_id == user.tenant_id).delete()
+    db.commit()
+    return RedirectResponse("/radar", 303)
+
+
+@app.post("/kuratierung/leeren")
+def kuratierung_clear(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/kuratierung", 303)
+    db.query(CurationDraft).filter(CurationDraft.tenant_id == user.tenant_id).delete()
+    db.commit()
+    return RedirectResponse("/kuratierung", 303)
 
 
 @app.get("/markt", response_class=HTMLResponse)

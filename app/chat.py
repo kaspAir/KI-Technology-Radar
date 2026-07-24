@@ -303,6 +303,66 @@ def interview(history: list, felder_text: str) -> str:
         return "Keine Verbindung zum Modell-Dienst. Bitte später erneut versuchen."
 
 
+CURATION_RULES = """\
+Du schlägst einer Organisation eine ERSTKURATIERUNG für ihr Technologie-Radar vor:
+Welche Themen aus dem gegebenen POOL passen zu ihrem Profil, und in welchem Ring?
+Du rufst dazu das Werkzeug kuratierungs_entwurf auf.
+
+STRENGE REGELN (E8/E4):
+- Wähle AUSSCHLIESSLICH aus dem unten gegebenen POOL. Verwende die dortigen Nummern
+  (id) unverändert. Erfinde KEINE Themen und keine ids, die nicht im Pool stehen.
+- Sei WÄHLERISCH: schlage nur vor, was zum Profil wirklich passt — Qualität vor Menge.
+  Ein knappes, treffsicheres Radar ist mehr wert als eine lange Liste.
+- Vergib je Vorschlag einen Ring, der die Haltung zum Profil ausdrückt:
+  Adopt = produktiv nutzen · Pilot = real erproben · Explore = aktiv erkunden ·
+  Watch = beobachten · Reject = bewusst als Nicht-Ziel markieren.
+- Begründe jeden Vorschlag in EINEM Satz, konkret aus Profil UND Pool-Eintrag (worauf
+  im Profil er einzahlt). Keine Allgemeinplätze.
+- Es ist ein ENTWURF, den ein Mensch prüft und ratifiziert. Du entscheidest nicht.
+- Sprich Deutsch (Schweizer Kontext, „ss" statt scharfem s).
+"""
+
+
+def suggest_curation(profile_text: str, pool: list, ring_names: list):
+    """Schlägt aus `pool` (Liste {id,title,branchen,summary}) passende Blips mit Ring vor.
+    Rückgabe: (Liste [{id,ring,begruendung}], None) oder (None, Fehlermeldung). Der Aufrufer
+    validiert die ids GEGEN den echten Pool — erfundene ids erreichen die DB nie."""
+    client, err = _client_or_error(STREAM_TIMEOUT)
+    if err:
+        return None, err
+    import anthropic
+    katalog = "\n".join(
+        f"[{p['id']}] {p['title']}"
+        + (f" — Branchen: {p['branchen']}" if p.get("branchen") else "")
+        + (f"\n     {p['summary'][:300]}" if p.get("summary") else "")
+        for p in pool)
+    schema = {"type": "object", "properties": {"vorschlaege": {"type": "array", "items": {
+        "type": "object", "properties": {
+            "id": {"type": "integer", "description": "id aus dem Pool"},
+            "ring": {"type": "string", "enum": ring_names},
+            "begruendung": {"type": "string"}},
+        "required": ["id", "ring", "begruendung"]}}}, "required": ["vorschlaege"]}
+    tool = {"name": "kuratierungs_entwurf",
+            "description": "Passende Pool-Einträge mit Ring + Begründung für das Radar dieses Mandanten.",
+            "input_schema": schema}
+    user = _outbound(f"{profile_text}\n\nPOOL (nur hieraus wählen, ids unverändert):\n{katalog}")
+    try:
+        resp = client.messages.create(
+            model=MODEL, max_tokens=4000, system=CURATION_RULES,
+            tools=[tool], tool_choice={"type": "tool", "name": "kuratierungs_entwurf"},
+            messages=[{"role": "user", "content": user}])
+        for b in resp.content:
+            if b.type == "tool_use" and b.name == "kuratierungs_entwurf":
+                return list((b.input or {}).get("vorschlaege") or []), None
+        return None, "Das Modell hat keinen Vorschlag geliefert. Bitte erneut versuchen."
+    except anthropic.AuthenticationError:
+        return None, "Der API-Schlüssel wurde abgelehnt. Bitte ANTHROPIC_API_KEY prüfen."
+    except anthropic.APIStatusError as e:
+        return None, f"Gerade nicht erreichbar (Status {e.status_code})."
+    except anthropic.APIConnectionError:
+        return None, "Keine Verbindung zum Modell-Dienst. Bitte später erneut versuchen."
+
+
 def extract_profile(history: list, schema: dict):
     """Leitet aus dem Erstgespräch einen strukturierten Profil-Entwurf ab (erzwungener
     Werkzeugaufruf gegen `schema`). Rückgabe: (dict, None) oder (None, Fehlermeldung).

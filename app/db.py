@@ -167,6 +167,21 @@ class ProfileDraft(Base):
     created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class CurationDraft(Base):
+    """KI-Vorschlag zur Erstkuratierung (E4): der Berater schlägt aus dem Pool passende
+    Blips mit Ring + Begründung vor; der Mensch nimmt sie auf oder verwirft sie. BEWUSST
+    getrennt von Curation (= ratifizierte Wahrheit) — ein Vorschlag ist noch keine Wertung.
+    Ein Vorschlag je (Mandant, Proposal)."""
+    __tablename__ = "curation_drafts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("proposals.id"), index=True)
+    ring: Mapped[str] = mapped_column(String(20), default="Watch")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    __table_args__ = (UniqueConstraint("tenant_id", "proposal_id", name="uq_cdraft"),)
+
+
 def _ensure_columns() -> None:
     """Leichte additive Migration (SQLite + MariaDB): fehlende Spalten per ALTER TABLE
     ADD COLUMN ergänzen, damit ein Schema-Zuwachs die bestehende DB nicht unbrauchbar

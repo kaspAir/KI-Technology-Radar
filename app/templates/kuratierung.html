@@ -1,0 +1,78 @@
+{% extends "base.html" %}{% set active='proposals' %}
+{% block title %}Erstkuratierung — KI-Radar{% endblock %}
+{% block body %}
+<style>
+  .sug{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:12px 14px;margin:10px 0}
+  .sug .t{font-size:14px;font-weight:600}
+  .sug .why{font-size:13px;color:#4a4741;line-height:1.5;margin:5px 0 9px}
+  .sug .br{font-size:12px;color:#8a867e}
+  .sug form{display:inline}
+  .ringpick{border:1px solid #e7e3da;border-radius:8px;padding:5px 8px}
+</style>
+<h1>Erstkuratierung</h1>
+<p class="sub">Der Berater sichtet den ganzen Vorschläge-Pool und schlägt vor, was zu
+eurem Profil passt — mit Ring und Begründung. Ihr entscheidet: <b>aufnehmen</b> (kommt
+auf euer Radar) oder <b>verwerfen</b>. Nichts geschieht automatisch (E4).</p>
+
+{% if err=='profil' %}<div class="err">Für einen Vorschlag braucht der Berater zuerst euer Profil.
+  <a href="/onboarding" style="color:var(--gold)">Im Gespräch erstellen</a> oder
+  <a href="/profil" style="color:var(--gold)">Formular ausfüllen</a>.</div>
+{% elif err=='leer' %}<div class="err">Der Pool enthält derzeit keine offenen Vorschläge mehr — es ist bereits alles kuratiert.</div>
+{% elif err %}<div class="err">Der Vorschlag konnte gerade nicht erstellt werden. Bitte in einem Moment erneut versuchen.</div>{% endif %}
+
+{% if can_edit %}
+<form method="post" action="/kuratierung/vorschlag" style="margin:0 0 16px"
+      onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Der Berater sichtet den Pool …';">
+  <button type="submit">{{ 'Neuen Vorschlag erstellen' if rows else 'Berater-Vorschlag erstellen' }}</button>
+  <span class="muted" style="margin-left:8px">{% if rows %}Ersetzt die aktuellen Vorschläge.{% else %}Kann einen Moment dauern.{% endif %}
+    {% if not has_profile %}<b>· Zuerst wird ein Profil benötigt.</b>{% endif %}</span>
+</form>
+{% endif %}
+
+{% if rows %}
+<div class="row" style="justify-content:space-between;align-items:center;margin:4px 0 8px">
+  <span class="muted">{{ rows|length }} Vorschläge — zum Prüfen. Ring ist anpassbar.</span>
+  {% if can_edit %}
+  <span>
+    <form method="post" action="/kuratierung/alle-aufnehmen"
+          onsubmit="return confirm('Alle {{ rows|length }} Vorschläge unverändert aufnehmen?');">
+      <button type="submit">Alle aufnehmen</button></form>
+    <form method="post" action="/kuratierung/leeren"
+          onsubmit="return confirm('Alle Vorschläge verwerfen?');">
+      <button type="submit" class="ghost">Verwerfen</button></form>
+  </span>
+  {% endif %}
+</div>
+
+{% for x in rows %}
+<div class="sug">
+  <div class="t"><a href="/thema/{{ x.p.id }}" style="color:var(--ink);text-decoration:none">{{ x.p.title }}</a></div>
+  {% if x.p.branchen %}<div class="br">{{ x.p.branchen }}</div>{% endif %}
+  <div class="why">{{ x.d.reason }}</div>
+  {% if can_edit %}
+  <form method="post" action="/kuratierung/aufnehmen">
+    <input type="hidden" name="proposal_id" value="{{ x.p.id }}">
+    <select name="ring" class="ringpick">
+      {% for r in rings %}<option {{ 'selected' if x.d.ring==r }}>{{ r }}</option>{% endfor %}
+    </select>
+    <button type="submit">Aufnehmen</button>
+  </form>
+  <form method="post" action="/kuratierung/verwerfen">
+    <input type="hidden" name="proposal_id" value="{{ x.p.id }}">
+    <button type="submit" class="ghost">Verwerfen</button>
+  </form>
+  {% else %}<span class="chip">Vorschlag: {{ x.d.ring }}</span>{% endif %}
+</div>
+{% endfor %}
+
+<p class="muted" style="margin-top:14px"><a href="/radar" style="color:var(--gold)">Zum Radar</a>
+  · <a href="/proposals" style="color:var(--gold)">Pool durchsuchen</a></p>
+{% elif not err %}
+<div class="card" style="border-left:3px solid var(--gold)">
+  <p class="sum" style="margin-top:0">Noch kein Vorschlag. {% if has_profile %}Klickt oben auf
+  <b>„Berater-Vorschlag erstellen"</b> — der Berater sichtet den Pool und schlägt eine passende
+  Erstkuratierung vor.{% else %}Zuerst braucht es ein Profil: <a href="/onboarding" style="color:var(--gold)">im
+  Gespräch erstellen</a>.{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

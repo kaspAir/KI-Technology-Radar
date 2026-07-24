@@ -2,6 +2,9 @@
 {% block body %}
 <h1>Vorschläge</h1>
 <p class="sub">Der Radar hat diese Belege gefunden ({{ total_open }} offen). Wähle, was auf <b>dein</b> Radar soll — und mit welchem Ring. Der Rest bleibt hier liegen.</p>
+<div class="card" style="border-left:3px solid var(--gold)">Nicht alles einzeln durchgehen?
+  <a href="/kuratierung" style="color:var(--gold)"><b>Erstkuratierung vom Berater vorschlagen lassen</b></a>
+  — er sichtet den ganzen Pool und schlägt passend zu eurem Profil vor.</div>
 
 <form method="get" action="/proposals" style="margin:0 0 14px">
   <label class="muted">Branche&nbsp;
