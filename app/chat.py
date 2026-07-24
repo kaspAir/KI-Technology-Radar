@@ -212,3 +212,124 @@ def ask(context: str, history: list, on_text=None, on_think=None) -> str:
         return f"Der Berater ist gerade nicht erreichbar (Status {e.status_code})."
     except anthropic.APIConnectionError:
         return "Keine Verbindung zum Modell-Dienst. Bitte später erneut versuchen."
+
+
+# ======================================================================================
+# Erstgespräch (Onboarding): der Berater INTERVIEWT, statt zu beraten — und aus dem
+# Gespräch wird anschliessend ein Profil-Entwurf abgeleitet (E4: KI entwirft, Mensch
+# ratifiziert). Bewusst OHNE Erdungs-Kontext: hier gibt es noch kein Profil.
+# ======================================================================================
+
+INTERVIEW_RULES = """\
+Du führst das ERSTGESPRÄCH des KI-Technology-Radars mit einer neuen Organisation.
+Dein Ziel ist NICHT zu beraten, sondern zuzuhören und zu verstehen — so gut, dass
+daraus danach ein Profil-Entwurf entstehen kann.
+
+SO FÜHRST DU DAS GESPRÄCH:
+- Stelle IMMER nur EINE Frage auf einmal, kurz und konkret. Kein Vortrag, keine Liste
+  von fünf Fragen.
+- Beginne offen (Organisation, Auftrag) und arbeite dich zu den konkreteren Punkten
+  vor. Frage nach, wo eine Antwort vage bleibt — aber bohre nicht endlos.
+- Spiegle in einem Satz, was du verstanden hast, bevor du weiterfragst. Das gibt der
+  Person Sicherheit und die Gelegenheit zu korrigieren.
+- Gib NOCH KEINE Strategie-Empfehlungen und keine Radar-Einordnung. Das kommt später.
+
+WORÜBER DU NACH UND NACH EIN BILD GEWINNST (nicht als Checkliste abfragen):
+{felder}
+
+WICHTIG:
+- Erfinde nichts über die Organisation. Was du nicht weisst, fragst du — oder lässt es
+  offen. Lieber eine Lücke als eine Vermutung.
+- Sobald du genug für einen ersten Entwurf hast (mindestens Auftrag, Branchen und ein
+  bis zwei Ziele), sag es der Person ausdrücklich: sie kann jetzt auf
+  „Profil-Entwurf erstellen" klicken — und danach im Gespräch weiter verfeinern.
+- Sprich Deutsch (Schweizer Kontext, „ss" statt scharfem s). Sei warm und knapp.
+"""
+
+EXTRACT_RULES = """\
+Aus dem folgenden Erstgespräch erzeugst du einen PROFIL-ENTWURF für die Organisation,
+indem du das Werkzeug profil_entwurf aufrufst.
+
+STRENGE REGELN:
+- Fülle nur Felder, für die im Gespräch tatsächlich eine Aussage steht. Wo nichts
+  gesagt wurde, LÄSST DU DAS FELD WEG. Rate nicht, ergänze nichts, runde nichts auf.
+- Gib die Aussagen sinngemäss und knapp wieder, nicht das ganze Gespräch wörtlich.
+- Bei Auswahlfeldern nimmst du die am besten passende vorgegebene Option — aber nur,
+  wenn eine Aussage sie klar stützt. Sonst weglassen.
+- Es ist ein ENTWURF, den ein Mensch prüft. Unvollständig ist in Ordnung; erfunden
+  ist es nicht.
+"""
+
+
+def _client_or_error(timeout: float):
+    """Gibt (client, None) zurück oder (None, Fehlermeldung) — gleiche Vorprüfung wie ask."""
+    try:
+        import anthropic
+    except ImportError:
+        return None, ("Nicht verfügbar: das Paket anthropic fehlt in der Umgebung "
+                      "(app/requirements.txt installieren).")
+    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+        return None, "Nicht verfügbar: kein ANTHROPIC_API_KEY in der Umgebung."
+    return anthropic.Anthropic(timeout=timeout), None
+
+
+def interview(history: list, felder_text: str) -> str:
+    """Nächste Interview-Frage/-Antwort im Erstgespräch. Synchron: die Beiträge sind
+    kurz (eine Frage), ein Streaming lohnt hier nicht. Rückgabe: Text (oder ehrliche
+    Fehlermeldung, die als Beitrag angezeigt wird)."""
+    client, err = _client_or_error(STREAM_TIMEOUT)
+    if err:
+        return err
+    import anthropic
+    system = [{"type": "text",
+               "text": _outbound(INTERVIEW_RULES.replace("{felder}", felder_text)),
+               "cache_control": {"type": "ephemeral"}}]
+    kept, _ = fit_history(history)
+    msgs = [{"role": m["role"], "content": _outbound(m["content"])} for m in kept] \
+        or [{"role": "user", "content": "(Bitte eröffne das Gespräch.)"}]
+    try:
+        resp = client.messages.create(model=MODEL, max_tokens=1500, system=system, messages=msgs)
+        if resp.stop_reason == "refusal":
+            return "Diese Anfrage wurde aus Sicherheitsgründen abgelehnt. Bitte anders formulieren."
+        text = next((b.text for b in resp.content if b.type == "text"), "")
+        return _inbound(text) or "(keine Antwort erhalten)"
+    except anthropic.RateLimitError:
+        return "Zu viele Anfragen — bitte kurz warten und erneut senden."
+    except anthropic.AuthenticationError:
+        return "Der API-Schlüssel wurde abgelehnt. Bitte ANTHROPIC_API_KEY prüfen."
+    except anthropic.APIStatusError as e:
+        return f"Gerade nicht erreichbar (Status {e.status_code})."
+    except anthropic.APIConnectionError:
+        return "Keine Verbindung zum Modell-Dienst. Bitte später erneut versuchen."
+
+
+def extract_profile(history: list, schema: dict):
+    """Leitet aus dem Erstgespräch einen strukturierten Profil-Entwurf ab (erzwungener
+    Werkzeugaufruf gegen `schema`). Rückgabe: (dict, None) oder (None, Fehlermeldung).
+    KEIN thinking — mit erzwungenem tool_choice unverträglich und hier unnötig."""
+    client, err = _client_or_error(STREAM_TIMEOUT)
+    if err:
+        return None, err
+    import anthropic
+    transcript = "\n".join(
+        ("Organisation" if m["role"] == "user" else "Berater") + ": " + m["content"]
+        for m in history)
+    tool = {"name": "profil_entwurf",
+            "description": "Strukturierter Profil-Entwurf der Organisation aus dem Gespräch.",
+            "input_schema": schema}
+    try:
+        resp = client.messages.create(
+            model=MODEL, max_tokens=2000,
+            system=EXTRACT_RULES,
+            tools=[tool], tool_choice={"type": "tool", "name": "profil_entwurf"},
+            messages=[{"role": "user", "content": _outbound("GESPRÄCH:\n" + transcript)}])
+        for b in resp.content:
+            if b.type == "tool_use" and b.name == "profil_entwurf":
+                return dict(b.input or {}), None
+        return None, "Das Modell hat keinen Entwurf geliefert. Bitte im Gespräch noch etwas ergänzen."
+    except anthropic.AuthenticationError:
+        return None, "Der API-Schlüssel wurde abgelehnt. Bitte ANTHROPIC_API_KEY prüfen."
+    except anthropic.APIStatusError as e:
+        return None, f"Gerade nicht erreichbar (Status {e.status_code})."
+    except anthropic.APIConnectionError:
+        return None, "Keine Verbindung zum Modell-Dienst. Bitte später erneut versuchen."

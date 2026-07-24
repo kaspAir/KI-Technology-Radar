@@ -1,0 +1,70 @@
+{% extends "base.html" %}{% set active='onboarding' %}
+{% block title %}Erstgespräch — KI-Radar{% endblock %}
+{% block body %}
+<style>
+  .msg{max-width:100%;margin:0 0 12px;scroll-margin-top:88px}
+  .msg .who{font-size:12px;color:#8a867e;margin:0 0 3px}
+  .msg .txt{background:#fff;border:1px solid #e7e3da;border-radius:12px;padding:11px 14px;
+            font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+  .msg.me .txt{background:#faf7f1;border-color:#eee7db}
+  .msg.bot .txt{border-left:3px solid var(--gold)}
+  .chatform textarea{width:100%;box-sizing:border-box;border:1px solid #e7e3da;border-radius:10px;
+                     padding:9px 11px;font:inherit;font-size:14px;resize:vertical}
+</style>
+<h1>Erstgespräch</h1>
+<p class="sub">Statt leere Felder auszufüllen: Erzählt dem Berater von eurer Organisation.
+Aus dem Gespräch entsteht ein <b>Profil-Entwurf</b>, den ihr prüft und speichert —
+entschieden wird von euch (der Entwurf übernimmt nichts von selbst).</p>
+
+{% if err %}
+<div class="err">{% if err=='leer' %}Für einen Entwurf braucht es zuerst ein paar Sätze im Gespräch.
+{% else %}Der Entwurf konnte gerade nicht erstellt werden. Bitte in einem Moment erneut versuchen
+— oder im Gespräch noch etwas ergänzen.{% endif %}</div>
+{% endif %}
+
+{% if has_profile %}
+<div class="card">Ihr habt bereits ein Profil. Ein Erstgespräch ist trotzdem möglich — der
+  Entwurf füllt dann nur <b>leere</b> Felder und überschreibt eure Angaben nicht.
+  <a href="/profil" style="color:var(--gold)">Zum Profil</a></div>
+{% endif %}
+
+{% for m in msgs %}
+<div class="msg {{ 'me' if m.role=='user' else 'bot' }}"{% if loop.last %} id="neueste"{% endif %}>
+  <div class="who">{{ 'Ihr' if m.role=='user' else 'Berater' }}</div>
+  <div class="txt">{{ m.content }}</div>
+</div>
+{% else %}
+<div class="card" style="border-left:3px solid var(--gold)">
+  <p class="sum">Zum Einstieg zum Beispiel: <i>„Wir sind eine kantonale Fachstelle für …
+  und wollen KI in … einsetzen."</i> Der Berater fragt dann Schritt für Schritt nach —
+  Auftrag, Branchen, Ziele, Risikoneigung, Datenresidenz.</p>
+</div>
+{% endfor %}
+
+{% if can_edit %}
+<form method="post" action="/onboarding/senden" class="chatform" style="margin-top:16px">
+  <textarea name="message" rows="3" placeholder="Erzählt von eurer Organisation …" autofocus></textarea>
+  <div class="row" style="margin-top:8px;align-items:center">
+    <button type="submit">Senden</button>
+    <span class="muted">Der Berater antwortet mit einer kurzen Rückfrage.</span>
+  </div>
+</form>
+
+{% if can_start %}
+<form method="post" action="/onboarding/entwurf" style="margin-top:14px"
+      onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Entwurf entsteht …';">
+  <button type="submit" class="ghost">Profil-Entwurf erstellen</button>
+  <span class="muted" style="margin-left:8px">Verdichtet das Gespräch zu einem prüfbaren
+    Profil-Entwurf{% if has_draft %} (ersetzt den bisherigen Entwurf){% endif %}. Ihr ratifiziert
+    ihn danach im Profil-Formular.</span>
+</form>
+{% endif %}
+{% else %}
+<p class="muted">Nur-Lese-Zugriff — Mitglieder und Admins können das Erstgespräch führen.</p>
+{% endif %}
+
+{% if msgs %}
+<p class="muted" style="margin-top:18px"><a href="/chat" style="color:var(--gold)">Zum Berater</a>
+  · <a href="/profil" style="color:var(--gold)">Zum Profil</a></p>
+{% endif %}
+{% endblock %}

@@ -6,6 +6,21 @@
 Lagebild und die Empfehlungen. Privat, pro Mandant (E25). <b>Direkt gespeichert</b> —
 kein Download, kein Commit.</p>
 {% if saved %}<div class="card" style="border-left:3px solid #2e7d32">✓ Profil gespeichert.</div>{% endif %}
+{% if entwurf %}
+<div class="card" style="border-left:3px solid var(--gold)">
+  <b>Entwurf aus dem Erstgespräch.</b> Die <span style="background:#fdf6e3;padding:0 3px">gold hinterlegten</span>
+  Felder hat der Berater aus eurem Gespräch vorgeschlagen — <b>bitte prüfen, korrigieren
+  und speichern</b>. Erst das Speichern übernimmt sie (nichts geschieht automatisch).
+  <span class="muted">Noch etwas ergänzen? <a href="/onboarding" style="color:var(--gold)">Zurück ins Gespräch</a>.</span>
+</div>
+{% elif draft_available %}
+<div class="card" style="border-left:3px solid var(--gold)">Aus eurem Erstgespräch liegt ein
+  Profil-Entwurf bereit. <a href="/profil?entwurf=1" style="color:var(--gold)">Entwurf einblenden</a>.</div>
+{% elif can_edit and not (vals.values()|select|list) %}
+<div class="card">Lieber im Gespräch beginnen, statt Felder auszufüllen?
+  <a href="/onboarding" style="color:var(--gold)">Profil im Gespräch erstellen</a> — der Berater
+  fragt, ihr erhaltet einen prüfbaren Entwurf.</div>
+{% endif %}
 {% if parent %}<div class="card" style="border-left:3px solid var(--gold)">Erbt strategische Vorgaben von <b>{{ parent.name }}</b>. Leere Felder übernehmen dessen Werte automatisch (unten als „Vorgabe“ angezeigt).</div>{% endif %}
 {% if not can_edit %}<div class="err">Nur-Lese-Zugriff (Rolle „viewer“). Änderungen kann ein Admin/Mitglied vornehmen.</div>{% endif %}
 <form method="post" action="/profil">
@@ -13,8 +28,9 @@ kein Download, kein Commit.</p>
     {% if key=='§' %}
       <div class="ringhead">{{ label }}</div>
     {% else %}
-      <div style="margin:9px 0">
-        <label class="muted" for="p_{{key}}">{{ label }}</label><br>
+      {% set isd = key in draft_keys %}
+      <div style="margin:9px 0{% if isd %};background:#fdf6e3;border-radius:8px;padding:6px 8px{% endif %}">
+        <label class="muted" for="p_{{key}}">{{ label }}{% if isd %} <span style="color:var(--gold)">· Entwurf</span>{% endif %}</label><br>
         {% if typ=='select' %}
           <select id="p_{{key}}" name="{{ key }}" {{ 'disabled' if not can_edit }}>
             <option value=""></option>

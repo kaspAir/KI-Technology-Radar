@@ -31,7 +31,7 @@ from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
 from .db import (ChatAttachment, ChatMessage, Curation, CurationEvent, Profile,
-                 Proposal, ROLES, SessionLocal, Tenant, User, init_db)
+                 ProfileDraft, Proposal, ROLES, SessionLocal, Tenant, User, init_db)
 from .security import hash_pw, verify_pw
 
 RINGS = ["Adopt", "Pilot", "Explore", "Watch", "Reject"]
@@ -89,6 +89,35 @@ PROFILE_FIELDS = [
     ("staerken", "Vorhandene Stärken", "list", None),
     ("kompetenz_luecken", "Kompetenz-Lücken / Aufbau-Ziele", "list", None),
 ]
+
+
+def _profile_schema() -> dict:
+    """JSON-Schema für die Profil-Extraktion aus dem Erstgespräch. Alle Felder optional
+    (nur füllen, was im Gespräch wirklich vorkam); Auswahlfelder als enum."""
+    props = {}
+    for key, label, typ, opt in PROFILE_FIELDS:
+        if key == "§":
+            continue
+        if typ == "list":
+            props[key] = {"type": "array", "items": {"type": "string"}, "description": label}
+        elif typ == "select" and opt:
+            props[key] = {"type": "string", "enum": opt, "description": label}
+        else:
+            props[key] = {"type": "string", "description": label}
+    return {"type": "object", "properties": props}
+
+
+def _felder_text() -> str:
+    """Feld-Übersicht für den Interview-Prompt (nach Abschnitten, mit Auswahloptionen)."""
+    lines = []
+    for key, label, typ, opt in PROFILE_FIELDS:
+        if key == "§":
+            lines.append(f"\n{label}:")
+        elif typ == "select" and opt:
+            lines.append(f"- {label} (z.B. {', '.join(opt)})")
+        else:
+            lines.append(f"- {label}")
+    return "\n".join(lines)
 
 
 @app.on_event("startup")
@@ -649,13 +678,29 @@ def radar(request: Request, as_of: str = "", user=Depends(current_user), db=Depe
 
 # --- Mandanten-Profil (pro Mandant, mit Eltern-Vererbung) --------------------
 @app.get("/profil", response_class=HTMLResponse)
-def profil_form(request: Request, saved: int = 0, user=Depends(current_user), db=Depends(db_session)):
+def profil_form(request: Request, saved: int = 0, entwurf: int = 0,
+                user=Depends(current_user), db=Depends(db_session)):
     if not user:
         return RedirectResponse("/login", 302)
     if not user.tenant_id:
         return RedirectResponse("/admin", 302)
     prof = db.get(Profile, user.tenant_id)
     data = json.loads(prof.data) if prof and prof.data else {}
+    # Entwurf aus dem Erstgespräch (E4): nur ANZEIGEN, wenn ausdrücklich aufgerufen
+    # (?entwurf=1). Er überlagert leere Felder; gespeichert wird er erst durch den
+    # Menschen. Vorhandene eigene Werte bleiben stehen (der Entwurf drängt sich nicht auf).
+    draft_row = db.get(ProfileDraft, user.tenant_id)
+    draft = json.loads(draft_row.data) if (entwurf and draft_row and draft_row.data) else {}
+    draft_keys = set()
+    if draft:
+        merged = dict(data)
+        for k, v in draft.items():
+            if v in (None, "", [], {}):
+                continue
+            if data.get(k) in (None, "", [], {}):   # nur leere Felder füllen
+                merged[k] = v
+                draft_keys.add(k)
+        data = merged
     parent = db.get(Tenant, db.get(Tenant, user.tenant_id).parent_id) if db.get(Tenant, user.tenant_id).parent_id else None
     inherited = effective_profile(db, parent.id) if parent else {}
     vals = {}
@@ -669,7 +714,10 @@ def profil_form(request: Request, saved: int = 0, user=Depends(current_user), db
         inh[k] = ", ".join(str(x) for x in v) if isinstance(v, list) else str(v)
     return templates.TemplateResponse(request, "profil.html", {
         **_nav(user, db), "active": "profil", "fields": PROFILE_FIELDS, "vals": vals,
-        "saved": bool(saved), "inherited": inh, "parent": parent})
+        "saved": bool(saved), "inherited": inh, "parent": parent,
+        "entwurf": bool(draft), "draft_keys": draft_keys,
+        # Entwurf zum Nachlesen/Neu-Vorschlagen anbieten, auch ohne ?entwurf=1
+        "draft_available": draft_row is not None})
 
 
 @app.post("/profil")
@@ -689,6 +737,10 @@ async def save_profil(request: Request, user=Depends(current_user), db=Depends(d
         prof.data = payload
     else:
         db.add(Profile(tenant_id=user.tenant_id, data=payload))
+    # Speichern IST die Ratifizierung (E4): ein etwaiger Entwurf hat seinen Zweck erfüllt.
+    draft = db.get(ProfileDraft, user.tenant_id)
+    if draft:
+        db.delete(draft)
     db.commit()
     return RedirectResponse("/profil?saved=1", 303)
 
@@ -816,6 +868,7 @@ def _last_done_id(db, tenant_id) -> int:
     # Zeilen fielen stillschweigend raus (Altbestand vor der Spalte). Darum ausdrücklich.
     return db.scalar(select(func.max(ChatMessage.id)).where(
         ChatMessage.tenant_id == tenant_id,
+        ChatMessage.channel == "advisor",
         ChatMessage.archived == False,                 # noqa: E712
         or_(ChatMessage.status.is_(None), ChatMessage.status != "pending"))) or 0
 
@@ -828,6 +881,7 @@ def _chat_history(db, tenant_id):
     atts = _attachments_by_message(db, tenant_id)
     hist, seen = [], set()
     for m in db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == tenant_id,
+                                                  ChatMessage.channel == "advisor",
                                                   ChatMessage.archived == False)  # noqa: E712
                         .order_by(ChatMessage.id)):
         if m.status in ("pending", "error"):
@@ -857,10 +911,12 @@ def chat_page(request: Request, user=Depends(current_user), db=Depends(db_sessio
     from . import chat as _chat
     _expire_stale(db, user.tenant_id)
     msgs = db.scalars(select(ChatMessage).where(ChatMessage.tenant_id == user.tenant_id,
+                                                ChatMessage.channel == "advisor",
                                                 ChatMessage.archived == False)  # noqa: E712
                       .order_by(ChatMessage.id)).all()
     n_archived = db.scalar(select(func.count()).select_from(ChatMessage).where(
-        ChatMessage.tenant_id == user.tenant_id, ChatMessage.archived == True)) or 0  # noqa: E712
+        ChatMessage.tenant_id == user.tenant_id, ChatMessage.channel == "advisor",
+        ChatMessage.archived == True)) or 0  # noqa: E712
     kept, dropped = _chat.fit_history(_chat_history(db, user.tenant_id))
     return templates.TemplateResponse(request, "chat.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
@@ -994,7 +1050,9 @@ def chat_reset(request: Request, user=Depends(current_user), db=Depends(db_sessi
     if not can_edit(user) or not user.tenant_id:
         return RedirectResponse("/chat", 303)
     # ARCHIVIEREN statt löschen — das alte Gespräch bleibt unter /chat/archiv lesbar.
+    # Nur den Berater-Kanal, nicht das Erstgespräch (channel='onboarding').
     db.query(ChatMessage).filter(ChatMessage.tenant_id == user.tenant_id,
+                                 ChatMessage.channel == "advisor",
                                  ChatMessage.archived == False).update(  # noqa: E712
         {"archived": True})
     db.commit()
@@ -1014,6 +1072,83 @@ def chat_archive(request: Request, user=Depends(current_user), db=Depends(db_ses
     return templates.TemplateResponse(request, "chat_archiv.html", {
         **_nav(user, db), "active": "chat", "msgs": msgs,
         "atts": _attachments_by_message(db, user.tenant_id)})
+
+
+# ======================================================================================
+# Erstgespräch (Onboarding): der neue Mandant REDET zuerst mit dem Berater; daraus wird
+# ein Profil-Entwurf abgeleitet, den er im /profil-Formular ratifiziert (E4). Bewusst
+# synchron — die Interview-Beiträge sind kurz, kein Streaming/Hintergrundlauf nötig.
+# ======================================================================================
+
+def _onboarding_history(db, tenant_id):
+    """Verlauf des Erstgesprächs als [{role, content}] (channel='onboarding')."""
+    return [{"role": m.role, "content": m.content}
+            for m in db.scalars(select(ChatMessage).where(
+                ChatMessage.tenant_id == tenant_id,
+                ChatMessage.channel == "onboarding").order_by(ChatMessage.id))]
+
+
+@app.get("/onboarding", response_class=HTMLResponse)
+def onboarding_page(request: Request, err: str = "", user=Depends(current_user),
+                    db=Depends(db_session)):
+    if not user:
+        return RedirectResponse("/login", 302)
+    if not user.tenant_id:
+        return RedirectResponse("/admin", 302)
+    msgs = db.scalars(select(ChatMessage).where(
+        ChatMessage.tenant_id == user.tenant_id,
+        ChatMessage.channel == "onboarding").order_by(ChatMessage.id)).all()
+    n_user = sum(1 for m in msgs if m.role == "user")
+    return templates.TemplateResponse(request, "onboarding.html", {
+        **_nav(user, db), "active": "onboarding", "msgs": msgs,
+        "can_start": n_user >= 1, "has_draft": db.get(ProfileDraft, user.tenant_id) is not None,
+        "has_profile": bool(effective_profile(db, user.tenant_id)), "err": err})
+
+
+@app.post("/onboarding/senden")
+def onboarding_send(request: Request, message: str = Form(""),
+                    user=Depends(current_user), db=Depends(db_session)):
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/onboarding", 303)
+    text = (message or "").strip()
+    if not text:
+        return RedirectResponse("/onboarding", 303)
+    from . import chat as _chat
+    db.add(ChatMessage(tenant_id=user.tenant_id, user_id=user.id, role="user",
+                       channel="onboarding", content=text))
+    db.commit()
+    reply = _chat.interview(_onboarding_history(db, user.tenant_id), _felder_text())
+    db.add(ChatMessage(tenant_id=user.tenant_id, user_id=None, role="assistant",
+                       channel="onboarding", content=reply))
+    db.commit()
+    return RedirectResponse("/onboarding#neueste", 303)
+
+
+@app.post("/onboarding/entwurf")
+def onboarding_draft(request: Request, user=Depends(current_user), db=Depends(db_session)):
+    """Aus dem Erstgespräch einen Profil-Entwurf ableiten (E4: KI entwirft). Er wird als
+    ProfileDraft abgelegt und im /profil-Formular vorgeschlagen — ratifiziert wird beim
+    Speichern durch den Menschen, nicht hier."""
+    if not can_edit(user) or not user.tenant_id:
+        return RedirectResponse("/onboarding", 303)
+    from . import chat as _chat
+    hist = _onboarding_history(db, user.tenant_id)
+    if not any(m["role"] == "user" for m in hist):
+        return RedirectResponse("/onboarding?err=leer", 303)
+    data, err = _chat.extract_profile(hist, _profile_schema())
+    if err or not data:
+        return RedirectResponse("/onboarding?err=1", 303)
+    # nur bekannte Felder, leere weglassen — der Entwurf soll ehrlich lückenhaft sein
+    keys = {k for k, _l, _t, _o in PROFILE_FIELDS if k != "§"}
+    clean = {k: v for k, v in data.items() if k in keys and v not in (None, "", [], {})}
+    payload = json.dumps(clean, ensure_ascii=False)
+    existing = db.get(ProfileDraft, user.tenant_id)
+    if existing:
+        existing.data = payload
+    else:
+        db.add(ProfileDraft(tenant_id=user.tenant_id, data=payload))
+    db.commit()
+    return RedirectResponse("/profil?entwurf=1", 303)
 
 
 @app.get("/markt", response_class=HTMLResponse)

@@ -54,7 +54,8 @@ auf euer Profil und die von euch gewählten Radar-Inhalte. Der Berater macht
 {% if not has_profile or n_blips == 0 %}
 <div class="card" style="border-left:3px solid var(--gold)">
   Für ein gutes Gespräch fehlt noch Grundlage:
-  {% if not has_profile %}<a href="/profil" style="color:var(--gold)">Profil ausfüllen</a>{% endif %}
+  {% if not has_profile %}<a href="/onboarding" style="color:var(--gold)">Profil im Gespräch erstellen</a>
+    <span class="muted">oder <a href="/profil" style="color:var(--gold)">Formular ausfüllen</a></span>{% endif %}
   {% if not has_profile and n_blips == 0 %} · {% endif %}
   {% if n_blips == 0 %}<a href="/proposals" style="color:var(--gold)">Themen aufnehmen</a>{% endif %}
 </div>

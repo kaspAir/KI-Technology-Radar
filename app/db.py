@@ -124,6 +124,10 @@ class ChatMessage(Base):
     # „Zurücksetzen" ARCHIVIERT statt zu löschen: ein neues Gespräch beginnt frisch,
     # das alte bleibt nachlesbar. Zerstörende Knöpfe ohne Rückweg gehören nicht ins Produkt.
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 'advisor' = Strategiegespräch (Berater) · 'onboarding' = Erstgespräch, aus dem ein
+    # Profil-Entwurf abgeleitet wird. Getrennt, damit das Erstgespräch den Berater-Verlauf
+    # (und dessen Kontext) nicht verschmutzt.
+    channel: Mapped[str] = mapped_column(String(20), default="advisor")
     # Lebenszeichen während des Laufs (z.B. „denkt · 1'200 Zeichen"). Sichtbarer Beleg,
     # dass gearbeitet wird — solange das Modell denkt, kommt noch kein Antworttext.
     progress: Mapped[str] = mapped_column(String(120), default="")
@@ -150,6 +154,17 @@ class Profile(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
     data: Mapped[str] = mapped_column(Text, default="{}")
     updated: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ProfileDraft(Base):
+    """KI-Entwurf des Profils aus dem Erstgespräch (E4: KI entwirft, Mensch ratifiziert).
+    BEWUSST getrennt von Profile: der Entwurf ist noch nicht die Wahrheit. Er wird im
+    /profil-Formular vorgeschlagen; erst das Speichern durch den Menschen ratifiziert ihn
+    (und löscht den Entwurf). Ein Entwurf pro Mandant genügt."""
+    __tablename__ = "profile_drafts"
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
+    data: Mapped[str] = mapped_column(Text, default="{}")
+    created: Mapped[_dt.datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 def _ensure_columns() -> None:
